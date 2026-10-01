@@ -1,11 +1,13 @@
 # Los Ojos de Imataca · atlas inmersivo
 
 > **Publicado:**
+> - **Dominio propio: https://rfigrup.com/los-ojos-de-imataca/** (proxy desde tu landing)
 > - Producción (Vercel): https://los-ojos-de-imataca.vercel.app
 > - Respaldo (GitHub Pages): https://danielder17.github.io/los-ojos-de-imataca/
 > - Código: https://github.com/danielder17/los-ojos-de-imataca
 >
-> Cada `git push` a `main` vuelve a desplegar automáticamente en Vercel.
+> Cada `git push` a `main` vuelve a desplegar automáticamente en Vercel, y el cambio aparece
+> también en rfigrup.com/los-ojos-de-imataca/ sin tocar el sitio principal.
 
 Consola geoespacial local (CesiumJS) con las capas y estadísticas del proyecto Imataca:
 serie multitemporal Sentinel-2 2017-2026, clasificación FAO 2025 por bloque, tipología

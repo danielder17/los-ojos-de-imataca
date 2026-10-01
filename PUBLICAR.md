@@ -4,9 +4,10 @@
 
 | | URL |
 |---|---|
-| **Producción (Vercel)** | https://los-ojos-de-imataca.vercel.app |
-| **Respaldo (GitHub Pages)** | https://danielder17.github.io/los-ojos-de-imataca/ |
-| **Código (GitHub)** | https://github.com/danielder17/los-ojos-de-imataca (público) |
+| **Dominio propio** | **https://rfigrup.com/los-ojos-de-imataca/** |
+| Producción (Vercel) | https://los-ojos-de-imataca.vercel.app |
+| Respaldo (GitHub Pages) | https://danielder17.github.io/los-ojos-de-imataca/ |
+| Código (GitHub) | https://github.com/danielder17/los-ojos-de-imataca (público) |
 
 - Repositorio vinculado a Vercel: **cada `git push` a `main` despliega automáticamente**.
 - La protección de despliegue (Vercel Authentication) quedó **desactivada** para que el atlas
