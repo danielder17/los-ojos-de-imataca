@@ -1,4 +1,19 @@
-# Publicar "Los Ojos de Imataca" · guía paso a paso
+# Publicar "Los Ojos de Imataca" · guía y estado
+
+## ✅ PUBLICADO (30-09-2026)
+
+| | URL |
+|---|---|
+| **Producción (Vercel)** | https://los-ojos-de-imataca.vercel.app |
+| **Respaldo (GitHub Pages)** | https://danielder17.github.io/los-ojos-de-imataca/ |
+| **Código (GitHub)** | https://github.com/danielder17/los-ojos-de-imataca (público) |
+
+- Repositorio vinculado a Vercel: **cada `git push` a `main` despliega automáticamente**.
+- La protección de despliegue (Vercel Authentication) quedó **desactivada** para que el atlas
+  sea de acceso público.
+- Para actualizar el atlas: `git add -A && git commit -m "..." && git push` y esperar ~1 minuto.
+
+---
 
 El atlas es un sitio **100 % estático** (HTML + JavaScript + datos): no necesita servidor de
 aplicaciones ni base de datos, por lo que se publica **gratis** en GitHub + Vercel o directamente
