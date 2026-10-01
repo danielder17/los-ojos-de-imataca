@@ -1,5 +1,12 @@
 # Los Ojos de Imataca · atlas inmersivo
 
+> **Publicado:**
+> - Producción (Vercel): https://los-ojos-de-imataca.vercel.app
+> - Respaldo (GitHub Pages): https://danielder17.github.io/los-ojos-de-imataca/
+> - Código: https://github.com/danielder17/los-ojos-de-imataca
+>
+> Cada `git push` a `main` vuelve a desplegar automáticamente en Vercel.
+
 Consola geoespacial local (CesiumJS) con las capas y estadísticas del proyecto Imataca:
 serie multitemporal Sentinel-2 2017-2026, clasificación FAO 2025 por bloque, tipología
 ecológica N2 del usuario y la capa de cobertura del bloque P6, sobre una interfaz de consola
