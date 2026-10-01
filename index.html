@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Los Ojos de Imataca</title>
+<link rel="stylesheet" href="vendor/package/Build/Cesium/Widgets/widgets.css">
+<style>
+/* ============================================================================
+   LOS OJOS DE IMATACA · atlas inmersivo
+   Lenguaje visual inspirado en "God's Eye View" (MIT, Bilawal Sidhu) y efectos
+   portados de ReactBits (MIT). Paneles de vidrio sobre globo a sangre.
+============================================================================ */
+:root{
+  --bg:#0a0a0f; --glass:rgba(12,12,20,.72); --glass2:rgba(18,18,28,.88);
+  --linea:rgba(255,255,255,.08); --linea2:rgba(255,255,255,.15);
+  --cian:#00d4ff; --cian-dim:rgba(0,212,255,.14); --cian-glow:rgba(0,212,255,.42);
+  --txt:#e8eaed; --txt2:rgba(232,234,237,.55); --txt3:rgba(232,234,237,.32);
+  --naranja:#ff8a4c; --violeta:#8b7cf6; --teal:#2dd4bf;
+  --mono:'JetBrains Mono','Cascadia Mono',Consolas,monospace;
+  --sans:'Inter','Segoe UI',system-ui,sans-serif;
+  --r:16px; --rb:10px;
+  --tf:150ms cubic-bezier(.4,0,.2,1); --ts:300ms cubic-bezier(.4,0,.2,1);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#globo{width:100%;height:100%;overflow:hidden;background:var(--bg);
+  font-family:var(--sans);color:var(--txt);-webkit-font-smoothing:antialiased}
+.capa-chispas{position:fixed;inset:0;z-index:90;pointer-events:none}
+.cesium-viewer-bottom{display:none!important}
+
+/* ---------------------------------------------------------------- pantalla de carga */
+#carga{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:26px;
+  transition:opacity .7s ease, visibility .7s}
+#carga.oculto{opacity:0;visibility:hidden}
+#cargaLienzo{position:absolute;inset:0;width:100%;height:100%}
+#carga .capa{position:relative;text-align:center}
+#carga h1{font-family:var(--mono);font-size:34px;letter-spacing:9px;font-weight:500}
+#carga p{font-family:var(--mono);font-size:10.5px;letter-spacing:3px;color:var(--txt2);margin-top:12px}
+#barraCarga{width:260px;height:2px;background:rgba(255,255,255,.09);margin:30px auto 0;overflow:hidden;border-radius:2px}
+#barraCarga i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--cian),var(--violeta));
+  transition:width .4s ease}
+#carga .credito{position:absolute;bottom:26px;left:0;right:0;text-align:center;
+  font-family:var(--mono);font-size:9.5px;color:var(--txt3);letter-spacing:1.4px;padding:0 20px}
+
+/* ---------------------------------------------------------------- textos animados */
+.texto-gradiente{background:linear-gradient(90deg,var(--cian) 0%,var(--violeta) 35%,var(--teal) 70%,var(--cian) 100%);
+  background-size:300% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:desliz 7s linear infinite}
+@keyframes desliz{0%{background-position:0% 50%}100%{background-position:300% 50%}}
+.texto-brillo{position:relative;color:var(--txt2);
+  background:linear-gradient(120deg,rgba(232,234,237,.35) 30%,#fff 50%,rgba(232,234,237,.35) 70%);
+  background-size:200% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;
+  animation:brillo 5.5s linear infinite}
+@keyframes brillo{0%{background-position:150% 0}100%{background-position:-50% 0}}
+
+/* ---------------------------------------------------------------- paneles */
+.panel{position:fixed;z-index:20;background:var(--glass);border:1px solid var(--linea);
+  border-radius:var(--r);backdrop-filter:blur(14px) saturate(1.2);
+  box-shadow:0 18px 50px rgba(0,0,0,.42);transition:transform var(--ts), opacity var(--ts), width var(--ts)}
+.panel h2{font-family:var(--mono);font-size:9.5px;letter-spacing:2.4px;color:var(--cian);
+  text-transform:uppercase;padding:14px 16px 8px;display:flex;align-items:center;gap:8px;cursor:pointer;
+  user-select:none}
+.panel h2 .chev{margin-left:auto;transition:transform var(--ts);color:var(--txt3);font-size:11px}
+.panel.plegado h2 .chev{transform:rotate(-90deg)}
+.panel h3{font-family:var(--mono);font-size:9.5px;letter-spacing:1.6px;color:var(--txt2);
+  text-transform:uppercase;padding:12px 16px 6px}
+.panel .cuerpo{padding-bottom:12px}
+.panel.plegado .cuerpo{display:none}
+.hr{height:1px;background:var(--linea);margin:10px 0 0}
+
+/* ---------------------------------------------------------------- barra superior */
+#barra{position:fixed;top:0;left:0;right:0;height:56px;z-index:25;display:flex;align-items:center;
+  gap:16px;padding:0 16px;background:linear-gradient(180deg,rgba(10,10,15,.94),rgba(10,10,15,.55) 70%,transparent);
+  pointer-events:none}
+#barra .marca{pointer-events:auto}
+#barra .marca b{font-family:var(--mono);font-size:15px;letter-spacing:4.6px;font-weight:500;display:block}
+#barra .marca i{font-style:normal;color:var(--cian)}
+#barra .marca span{font-family:var(--mono);font-size:9px;letter-spacing:2.2px;color:var(--txt3)}
+#chips{margin-left:auto;display:flex;gap:8px;pointer-events:auto}
+.chip{font-family:var(--mono);font-size:9.5px;letter-spacing:1.2px;color:var(--txt2);
+  background:rgba(12,12,20,.7);border:1px solid var(--linea);border-radius:999px;padding:5px 11px;
+  display:flex;align-items:center;gap:7px}
+.chip b{color:var(--txt);font-weight:500}
+.chip .pt{width:6px;height:6px;border-radius:50%;background:var(--cian);box-shadow:0 0 8px var(--cian-glow)}
+
+/* ---------------------------------------------------------------- riel izquierdo */
+#riel{top:66px;left:12px;width:268px;max-height:calc(100% - 176px);overflow-y:auto;overflow-x:hidden}
+#riel.plegado{width:46px}
+#riel.plegado .cuerpo,#riel.plegado h2 span.rot,#riel.plegado .hr{display:none}
+#riel.plegado h2{justify-content:center;padding:14px 0 8px}
+#riel::-webkit-scrollbar{width:7px}
+#riel::-webkit-scrollbar-thumb{background:var(--linea2);border-radius:4px}
+#botonRiel{position:fixed;z-index:26;top:66px;left:12px;transform:translateX(0)}
+#riel .bloque{display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;
+  border-left:2px solid transparent;transition:background var(--tf),border-color var(--tf)}
+#riel .bloque:hover{background:rgba(255,255,255,.04)}
+#riel .bloque.activo{background:var(--cian-dim);border-left-color:var(--cian)}
+#riel .bloque .nb{font-family:var(--mono);font-size:11.5px;font-weight:600}
+#riel .bloque .ha{margin-left:auto;font-family:var(--mono);font-size:9.5px;color:var(--txt3)}
+#riel .bloque .pt{width:7px;height:7px;border-radius:50%}
+.accion{display:flex;align-items:center;gap:9px;margin:6px 12px;padding:9px 12px;cursor:pointer;
+  border:1px solid var(--linea);border-radius:var(--rb);background:rgba(255,255,255,.02);
+  font-family:var(--mono);font-size:10px;letter-spacing:1.1px;color:var(--txt);
+  transition:border-color var(--tf),background var(--tf),transform var(--tf)}
+.accion:hover{border-color:var(--cian);background:var(--cian-dim)}
+.accion.activo{border-color:var(--cian);background:var(--cian-dim);color:#fff}
+.accion .ic{color:var(--cian);font-size:11px}
+.fila{display:flex;align-items:center;gap:9px;padding:6px 16px;font-size:11.5px;cursor:pointer}
+.fila:hover{background:rgba(255,255,255,.035)}
+.fila input[type=checkbox],.fila input[type=radio]{accent-color:var(--cian);width:13px;height:13px;cursor:pointer}
+.fila .nom{color:var(--txt)}
+.fila .sub{font-family:var(--mono);font-size:9px;color:var(--txt3);display:block;margin-top:1px}
+.fila.deshabilitada{opacity:.45;cursor:not-allowed}
+.slider{display:flex;align-items:center;gap:8px;padding:2px 16px 8px 38px;font-family:var(--mono);font-size:9px;color:var(--txt3)}
+.slider input{flex:1;accent-color:var(--cian);height:2px}
+.nota{font-size:10px;line-height:1.45;color:var(--txt3);padding:4px 16px 8px}
+
+/* ---------------------------------------------------------------- línea de tiempo */
+#lineaTiempo{left:292px;right:376px;bottom:12px;z-index:22;padding:0 0 12px;transition:left var(--ts)}
+body.riel-plegado #lineaTiempo{left:70px}
+#controlesSerie{flex-wrap:wrap}
+.cmpSel{display:flex;align-items:center;gap:8px;margin:8px 14px}
+.cmpSel select{flex:1;padding:6px 8px;background:var(--glass2);color:var(--txt);
+  border:1px solid var(--linea);border-radius:8px;font-size:11px}
+.cmpSel span{font-family:var(--mono);font-size:9px;color:var(--txt3)}
+.cmpTabla{width:calc(100% - 28px);margin:6px 14px;border-collapse:collapse;font-size:10px;
+  font-family:var(--mono)}
+.cmpTabla th{text-align:left;color:#9AA0C3;font-weight:500;padding:3px 4px;
+  border-bottom:1px solid #2A3160;font-size:8.6px}
+.cmpTabla td{padding:3px 4px;border-bottom:1px solid rgba(42,49,96,.45)}
+.cmpTabla td.n{text-align:right}
+.cmpTabla .pos{color:#7dc975}.cmpTabla .neg{color:#e8636c}
+#lineaTiempo .pie{font-size:9px;color:var(--txt2);margin:5px 16px 0;line-height:1.4}
+#lineaTiempo .tira{display:flex;align-items:center;gap:5px;padding:10px 16px 0;flex-wrap:wrap}
+#lineaTiempo .anio{font-family:var(--mono);font-size:10.5px;color:var(--txt2);cursor:pointer;
+  padding:4px 8px;border-radius:7px;border:1px solid transparent;transition:all var(--tf)}
+#lineaTiempo .anio:hover{color:var(--txt);background:rgba(255,255,255,.06)}
+#lineaTiempo .anio.act{color:#04121a;background:var(--cian);border-color:var(--cian);font-weight:600;
+  box-shadow:0 0 14px var(--cian-glow)}
+#lineaTiempo .anio.futuro{opacity:.4}
+#lineaTiempo .anio .pt{font-size:7px;vertical-align:super}
+#lineaTiempo .controles{display:flex;align-items:center;gap:8px;margin-left:auto}
+.mini{display:flex;gap:20px;padding:8px 16px 0;border-top:1px solid var(--linea);margin-top:9px}
+.mini div{font-family:var(--mono);font-size:9px;color:var(--txt3);letter-spacing:.6px}
+.mini div b{display:block;font-size:15px;color:var(--txt);letter-spacing:0;margin-top:2px;font-weight:500}
+.mini div b.cian{color:var(--cian)}
+#etiquetasSplit{position:fixed;z-index:21;left:292px;right:376px;top:50%;transform:translateY(-50%);
+  display:none;justify-content:space-between;pointer-events:none;font-family:var(--mono);
+  font-size:11px;letter-spacing:2px;color:#fff;text-shadow:0 2px 12px #000}
+#etiquetasSplit.on{display:flex}
+#sliderSplit{position:fixed;z-index:21;left:292px;right:376px;bottom:150px;display:none;padding:0 16px}
+#sliderSplit.on{display:block}
+#sliderSplit input{width:100%;accent-color:var(--cian)}
+
+/* ---------------------------------------------------------------- panel de estadísticas */
+#panelStats{top:66px;right:12px;bottom:12px;width:352px;overflow-y:auto;overflow-x:hidden}
+#panelStats::-webkit-scrollbar{width:7px}
+#panelStats::-webkit-scrollbar-thumb{background:var(--linea2);border-radius:4px}
+#botonStats{position:fixed;z-index:26;top:66px;right:12px}
+.migas{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:4px 16px 2px;
+  font-family:var(--mono);font-size:10px}
+.migas .cr{color:var(--cian);cursor:pointer;padding:2px 6px;border-radius:6px;transition:background var(--tf)}
+.migas .cr:hover{background:var(--cian-dim)}
+.migas .sep{color:var(--txt3)}
+.migas .act{color:var(--txt);font-weight:600;padding:2px 6px}
+.nivelEnt{animation:entra .34s cubic-bezier(.2,.9,.3,1)}
+@keyframes entra{from{opacity:0;transform:translateY(-7px)}to{opacity:1;transform:none}}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:8px 16px}
+.kpi{position:relative;overflow:hidden;background:rgba(255,255,255,.028);border:1px solid var(--linea);
+  border-radius:12px;padding:9px 11px;--mouse-x:50%;--mouse-y:50%;--spotlight-color:rgba(0,212,255,.14)}
+.kpi::before{content:'';position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .5s ease;
+  background:radial-gradient(circle at var(--mouse-x) var(--mouse-y),var(--spotlight-color),transparent 80%)}
+.kpi:hover::before{opacity:.85}
+.kpi .v{font-family:var(--mono);font-size:16.5px;font-weight:500;line-height:1.15}
+.kpi .v small{font-size:9.5px;color:var(--txt3);font-weight:400}
+.kpi .k{font-size:8.6px;color:var(--txt3);text-transform:uppercase;letter-spacing:.7px;margin-top:4px;line-height:1.3}
+.kpi.fuerte .v{color:var(--cian)}
+.kpi.aviso .v{color:var(--naranja)}
+table.mini2{width:calc(100% - 32px);margin:6px 16px;border-collapse:collapse;font-size:10.5px;font-family:var(--mono)}
+table.mini2 th{text-align:left;color:var(--txt3);font-weight:500;padding:4px;border-bottom:1px solid var(--linea);
+  font-size:8.8px;text-transform:uppercase;letter-spacing:.6px}
+table.mini2 td{padding:4px;border-bottom:1px solid rgba(255,255,255,.05)}
+table.mini2 td.n{text-align:right}
+table.mini2 tr:hover td{background:rgba(0,212,255,.05)}
+.barra{padding:6px 16px;cursor:pointer;transition:background var(--tf)}
+.barra:hover{background:rgba(255,255,255,.035)}
+.barra.sel{background:var(--cian-dim)}
+.barra .rot{display:flex;align-items:center;gap:8px;font-size:11px}
+.barra .rot .sw{width:10px;height:10px;border-radius:3px;flex:none}
+.barra .rot .ha{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--txt2)}
+.barra .pista{height:5px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;margin-top:5px}
+.barra .rell{height:100%;width:0;border-radius:3px;transition:width .8s cubic-bezier(.22,.9,.28,1)}
+.nota2{font-size:10px;line-height:1.5;color:var(--txt2);padding:8px 16px 0}
+.nota2.aviso{background:rgba(255,138,76,.08);border-left:2px solid var(--naranja);
+  margin:8px 16px 0;padding:9px 11px;border-radius:0 8px 8px 0;color:#f4d3c2}
+.nota2 b{color:var(--txt)}
+.nota2.aviso b{color:var(--naranja)}
+.fuente{font-family:var(--mono);font-size:8.8px;line-height:1.5;color:var(--txt3);padding:12px 16px 4px}
+.chart{padding:6px 16px}
+.chart svg{width:100%;height:auto;display:block;overflow:visible}
+.chart .eje{font-size:8.6px;fill:var(--txt3);font-family:var(--mono)}
+.chart .act{font-size:9px;fill:var(--naranja);font-family:var(--mono);font-weight:600}
+
+/* ---------------------------------------------------------------- leyenda */
+/* la leyenda se ancla sobre la línea de tiempo y puede arrastrarse desde su
+   cabecera: nunca se superpone a la serie ni a ningún otro panel */
+#leyenda{position:fixed;z-index:24;width:214px;max-width:calc(100vw - 24px);display:none;flex-direction:column}
+#leyenda h2{cursor:move;touch-action:none}
+#leyenda.arrastrando{opacity:.92}
+/* ficha individual de tipología (mapa + serie + dona) */
+#ficha{position:fixed;z-index:25;width:322px;max-width:calc(100vw - 24px);display:none;flex-direction:column}
+#ficha h2{cursor:move;touch-action:none}
+#ficha .cerrar{margin-left:auto;cursor:pointer;color:var(--txt2);font-size:15px;line-height:1;
+  padding:0 4px;border-radius:5px;transition:color var(--tf)}
+#ficha .cerrar:hover{color:var(--naranja)}
+#ficha .cuerpo{flex:1 1 auto;min-height:0;overflow-y:auto;padding-bottom:10px}
+#ficha.aparece{animation:fichaEn .3s cubic-bezier(.2,.9,.3,1)}
+@keyframes fichaEn{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:none}}
+.mapaTipologia{position:relative;margin:2px 14px 0;border:1px solid var(--linea);border-radius:10px;
+  overflow:hidden;background:#0d1226}
+.mapaTipologia canvas{display:block;width:100%;height:auto}
+.mapaTipologia .escala{position:absolute;left:10px;bottom:8px;font-family:var(--mono);font-size:8.5px;
+  color:#cfd6ff;text-shadow:0 1px 3px #000;border-top:2px solid #cfd6ff;padding-top:2px;min-width:40px}
+.mapaTipologia .cargando{position:absolute;inset:0;display:grid;place-items:center;
+  font-family:var(--mono);font-size:9px;color:var(--txt3)}
+.kpis4{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:10px 14px 0}
+.kpis4 .kpi{padding:7px 9px}
+.donutFila{display:flex;align-items:center;gap:12px;margin:8px 14px 0}
+.donutFila svg{width:116px;height:116px;flex:none}
+.donutFila .dtexto{flex:1;font-size:10px;color:var(--txt2);line-height:1.55}
+.donutFila .dtexto b{font-family:var(--mono);color:var(--txt);font-weight:500}
+#leyenda .cuerpo{flex:1 1 auto;min-height:0;overflow-y:auto}
+.litem{display:block;position:relative;padding:6px 14px 6px 34px;font-size:10.5px;cursor:pointer}
+.litem:hover{background:rgba(255,255,255,.05)}
+.litem.foco{background:var(--cian-dim)}
+.litem.oculta{opacity:.42}
+.litem .nom{display:block;line-height:1.25}
+.litem .pc{display:block;font-family:var(--mono);font-size:9px;color:var(--txt3);margin-top:1px}
+.litem .sw{position:absolute;left:14px;top:7px;width:16px;height:16px;border-radius:4px;
+  box-shadow:0 0 0 1.5px rgba(255,255,255,.35)}
+.litem.oculta .sw::after{content:'×';position:absolute;inset:0;display:grid;place-items:center;
+  font-size:10px;color:#fff;text-shadow:0 1px 3px #000;font-weight:700}
+.litem .nom{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lacciones{display:flex;gap:6px;padding:6px 14px 2px}
+.lacciones button{flex:1;font-family:var(--mono);font-size:8.6px;letter-spacing:.7px;color:var(--txt2);
+  background:rgba(255,255,255,.04);border:1px solid var(--linea);border-radius:7px;padding:5px 0;
+  cursor:pointer;transition:all var(--tf)}
+.lacciones button:hover{color:var(--cian);border-color:var(--cian);background:var(--cian-dim)}
+#leyendaFoco{border-top:1px solid var(--linea);margin-top:8px;padding:10px 14px 4px}
+#leyendaFoco h4{font-size:11px;display:flex;align-items:center;gap:7px;margin-bottom:6px;line-height:1.25}
+#leyendaFoco .filaK{display:flex;justify-content:space-between;gap:8px;font-size:10px;margin:3px 0;color:var(--txt2)}
+#leyendaFoco .filaK b{font-family:var(--mono);color:var(--txt);font-weight:500;white-space:nowrap}
+.propbar{display:flex;height:7px;border-radius:4px;overflow:hidden;margin:7px 0 4px;background:rgba(255,255,255,.07)}
+.propbar i{display:block;height:100%;transition:width .6s cubic-bezier(.22,.9,.28,1)}
+.lnota{font-size:9.6px;line-height:1.45;color:var(--txt3);margin-top:7px}
+
+/* ---------------------------------------------------------------- navegación del globo */
+.brújula{position:fixed;right:376px;top:66px;z-index:20;display:flex;flex-direction:column;gap:6px}
+.brújula button{width:34px;height:34px;border-radius:9px;background:var(--glass);border:1px solid var(--linea);
+  color:var(--txt2);cursor:pointer;font-size:13px;backdrop-filter:blur(10px);transition:all var(--tf)}
+.brújula button:hover{border-color:var(--cian);color:var(--cian);background:var(--cian-dim)}
+@media (max-width:1300px){
+  #panelStats{width:320px} #lineaTiempo{right:344px} .brújula{right:344px}
+}
+@media (max-width:1000px){
+  .brújula{display:none}
+}
+</style>
+</head>
+<body>
+<div id="globo"></div>
+
+<!-- pantalla de carga con fondo Aurora (ReactBits, portado) -->
+<div id="carga">
+  <canvas id="cargaLienzo"></canvas>
+  <div class="capa">
+    <h1 class="texto-gradiente">LOS OJOS DE IMATACA</h1>
+    <p>RESERVA FORESTAL DE IMATACA · SENTINEL-2 2017-2026 · FAO 2025</p>
+    <div id="barraCarga"><i></i></div>
+  </div>
+  <div class="credito">CesiumJS · ReactBits (MIT) · Sentinel-2 (ESA) · EOX · Mapterhorn · elaboración propia</div>
+</div>
+
+<!-- barra superior -->
+<div id="barra">
+  <div class="marca">
+    <b>LOS <i>OJOS</i> DE IMATACA</b>
+    <span class="texto-brillo">CONSOLA GEOESPACIAL · RESERVA FORESTAL DE IMATACA</span>
+  </div>
+  <div id="chips">
+    <div class="chip"><span class="pt"></span><b id="chipFondo">Sentinel-2</b></div>
+    <div class="chip">AÑO <b id="chipAnio">2026</b></div>
+    <div class="chip">NIVEL <b id="chipNivel">RESERVA</b></div>
+    <div class="chip">ALT <b id="chipAlt">—</b></div>
+  </div>
+</div>
+
+<!-- riel izquierdo plegable -->
+<div class="panel" id="riel">
+  <h2 data-plegar-riel>▣ <span class="rot">PANEL DE CONTROL</span><span class="chev">▾</span></h2>
+  <div class="cuerpo">
+    <h3>Unidad de análisis</h3>
+    <div id="listaBloques"></div>
+    <div class="accion" id="btnReserva"><span class="ic">⌂</span> RESERVA COMPLETA</div>
+    <div class="accion" id="btnTour"><span class="ic">▶</span> RECORRIDO GUIADO</div>
+    <div class="hr"></div>
+    <h3>Capas del proyecto</h3>
+    <label class="fila"><input type="checkbox" id="chkBloques" checked><span class="nom">Bloques P1-P6</span></label>
+    <label class="fila"><input type="checkbox" id="chkReserva" checked><span class="nom">Límite de la reserva</span></label>
+    <label class="fila"><input type="checkbox" id="chkRFI"><span class="nom">Polígono RFI Landsat<span class="sub">límite del procesamiento 1985-2024 · 3,73 M ha</span></span></label>
+    <label class="fila"><input type="checkbox" id="chkP6"><span class="nom">Cobertura P6 · 10 m<span class="sub" id="subP6">clasificación FAO del bloque</span></span></label>
+    <div class="slider" id="opP6"><input type="range" id="opacidadP6" min="0" max="100" value="85"><span id="valOpP6">85 %</span></div>
+    <label class="fila" id="filaN2"><input type="checkbox" id="chkN2"><span class="nom">Tipología N2 · 30 m<span class="sub" id="subN2">capa del usuario</span></span></label>
+    <div class="slider" id="opN2"><input type="range" id="opacidadN2" min="0" max="100" value="85"><span id="valOpN2">85 %</span></div>
+    <div class="accion" id="btnN2Stats" style="display:none"><span class="ic">▦</span> TIPOLOGÍA N2 · ESTADÍSTICAS</div>
+    <div class="hr"></div>
+    <h3>Mapa de fondo</h3>
+    <div id="listaFondos"></div>
+    <label class="fila"><input type="checkbox" id="chkRelieve"><span class="nom">Relieve 3D<span class="sub">elevación real · Mapterhorn</span></span></label>
+    <div class="nota" id="notaFondo"></div>
+  </div>
+</div>
+
+<!-- línea de tiempo multitemporal -->
+<div class="panel" id="lineaTiempo">
+  <h2 data-plegar="lineaTiempo"><span id="tituloSerie">▤ SERIE MULTITEMPORAL · SENTINEL-2 2017-2026</span><span class="chev">▾</span></h2>
+  <div class="cuerpo">
+    <div class="tira" id="tiraAnios"></div>
+    <div class="controles" id="controlesSerie"></div>
+    <div class="pie" id="pieAnios"></div>
+    <div class="mini">
+      <div>AÑO ACTIVO<b id="mAnio">2026</b></div>
+      <div>VEGETACIÓN<b class="cian" id="mVeg">—</b></div>
+      <div>VEG. DENSA<b id="mDensa">—</b></div>
+      <div>NDVI MEDIO<b id="mNdvi">—</b></div>
+      <div id="mAlcance">UNIDAD<b>RESERVA</b></div>
+    </div>
+  </div>
+</div>
+<div id="etiquetasSplit"><span id="etqIzq">2017</span><span id="etqDer">2026</span></div>
+<div id="sliderSplit"><input type="range" id="posSplit" min="2" max="98" value="50"></div>
+
+<!-- panel de estadísticas -->
+<div class="panel" id="panelStats"><div id="stats"></div></div>
+
+<!-- leyenda -->
+<div class="panel plegado" id="leyenda">
+  <h2 id="leyendaBarra" title="Arrastrar para mover · clic para plegar">◧ LEYENDA<span class="chev">▾</span></h2>
+  <div class="cuerpo"><div id="leyendaItems"></div></div>
+</div>
+
+<!-- ficha individual de la tipología seleccionada -->
+<div class="panel" id="ficha">
+  <h2 id="fichaBarra" title="Arrastrar para mover"><span id="fichaTitulo">◧ FICHA</span>
+    <span class="cerrar" id="fichaCerrar" title="Cerrar la ficha">×</span></h2>
+  <div class="cuerpo" id="fichaCuerpo"></div>
+</div>
+
+<!-- navegación -->
+<div class="brújula">
+  <button id="btnReservaVista" title="Vista de la reserva">⌂</button>
+  <button id="btnNorte" title="Orientar al norte">↑</button>
+  <button id="btnZoomMas" title="Acercar">+</button>
+  <button id="btnZoomMenos" title="Alejar">−</button>
+</div>
+
+<script>window.CESIUM_BASE_URL='vendor/package/Build/Cesium/';</script>
+<script src="vendor/package/Build/Cesium/Cesium.js"></script>
+<script src="datos.js"></script>
+<script src="efectos.js"></script>
+<script src="mapas.js"></script>
+<script>
+/* ============================================================================
+   LOS OJOS DE IMATACA — aplicación
+   CesiumJS 1.124 (Apache-2.0) + datos propios del proyecto Imataca.
+   Niveles: Reserva › Bloque › Clase, con la serie 2017-2026 como eje temporal.
+   Todas las cifras provienen de datos.js (generado por atlas_datos.py).
+============================================================================ */
+const CSS_BLOQUE = {P1:'#8b7cf6', P2:'#6d5ba6', P3:'#2dd4bf', P4:'#0f9e8e', P5:'#ff7a45', P6:'#e8590c'};
+const ANIOS = (DATOS.reserva && DATOS.reserva.anios) || [];
+const ESTADO = {
+  anio: ANIOS.length ? ANIOS[ANIOS.length - 1] : null,
+  bloque: null, clase: null,
+  base: 's2', relieve: false, comparar: false, fuente: 's2',
+  anioIzq: 2018, reprod: null, tour: false
+};
+const $ = id => document.getElementById(id);
+const nf = (v, d) => (v === null || v === undefined || isNaN(v)) ? '—' :
+  Number(v).toLocaleString('es-ES', {minimumFractionDigits:d||0, maximumFractionDigits:d||0});
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+
+/* ------------------------------------------------------------------ Cesium */
+let viewer, dsBloques = null, dsReserva = null, capaBase = null, capaBaseIzq = null;
+/* capas temáticas del globo: se muestran completas según sus casillas.
+   La representación por tipología vive exclusivamente en la ficha. */
+const CAPAS = {
+  p6: { capa: null, alpha: 0.85,
+        url: 'tiles_p6/xyz_clip/{z}/{x}/{y}.png', maxLevel: 14,
+        credito: 'Cobertura P6 · elaboración propia' },
+  n2: { capa: null, alpha: 0.85,
+        url: 'tiles_n2/xyz/{z}/{x}/{y}.png', maxLevel: 13,
+        credito: 'Tipología ecológica N2 · capa del usuario' },
+};
+
+
+
+function arrancar() {
+  viewer = new Cesium.Viewer('globo', {
+    baseLayer: false, baseLayerPicker:false, geocoder:false, homeButton:false,
+    sceneModePicker:false, navigationHelpButton:false, animation:false, timeline:false,
+    fullscreenButton:false, infoBox:false, selectionIndicator:false
+  });
+  const esc = viewer.scene;
+  esc.globe.enableLighting = false;
+  esc.skyAtmosphere.show = true;
+  esc.globe.baseColor = Cesium.Color.fromCssColorString('#0a0a0f');
+  esc.fog.enabled = true;
+  esc.globe.showGroundAtmosphere = true;
+  esc.highDynamicRange = true;
+
+  ponerBase(ESTADO.base, ESTADO.anio).then(() => {
+    $('carga').classList.add('oculto');
+    setTimeout(() => { const c = $('carga'); if (c) c.style.display = 'none'; }, 900);
+  }).catch(() => {
+    // sin conexión: el atlas sigue siendo utilizable con las capas locales
+    $('carga').classList.add('oculto');
+    setTimeout(() => { const c = $('carga'); if (c) c.style.display = 'none'; }, 900);
+  });
+  prepararCapas();
+  cablearControles();
+  EFECTOS.clickSpark({ color: '#00d4ff', cuentas: 8, radio: 17, size: 12 });
+  EFECTOS.spotlight('#panelStats');
+  EFECTOS.spotlight('#riel');
+  ['btnReserva','btnTour','btnReservaVista'].forEach(id => EFECTOS.magnet($(id), 0.22));
+}
+
+/* ------------------------------------------------------------- capa de fondo */
+function ponerBase(id, anio) {
+  ESTADO.base = id;
+  const esS2 = (id === 's2');
+  const p = esS2 ? Promise.resolve(MAPAS.proveedorS2(anio)) : MAPAS.proveedor(id, anio);
+  return p.then(prov => {
+    if (!viewer) return;
+    if (capaBase) { viewer.imageryLayers.remove(capaBase, true); capaBase = null; }
+    capaBase = viewer.imageryLayers.addImageryProvider(prov, 0);
+    capaBase.splitDirection = ESTADO.comparar ? Cesium.SplitDirection.RIGHT : Cesium.SplitDirection.NONE;
+    if (ESTADO.comparar) asegurarSplitIzq();
+    actualizarChips();
+    const ficha = MAPAS.CATALOGO.find(c => c.id === id);
+    const real = MAPAS.anioS2(anio);
+    $('notaFondo').innerHTML = (ficha ? ficha.nota : '') +
+      (esS2 ? (real !== anio ? ' · <b style="color:#ff8a4c">sin mosaico ' + anio + ': se muestra ' + real + '</b>'
+                            : ' · año ' + real) : '') +
+      (esS2 ? '<br>Cobertura EOX verificada sobre la reserva: 2018-2025 (2019 y 2020 solo hasta zoom 10).' : '');
+  }).catch(e => {
+    console.error('fondo:', e);
+    $('notaFondo').innerHTML = 'No se pudo cargar este fondo (¿sin conexión?). Las capas locales siguen activas.';
+  });
+}
+/* capa izquierda de la comparación (año de referencia) */
+function asegurarSplitIzq() {
+  if (capaBaseIzq) { viewer.imageryLayers.remove(capaBaseIzq, true); capaBaseIzq = null; }
+  capaBaseIzq = viewer.imageryLayers.addImageryProvider(MAPAS.proveedorS2(ESTADO.anioIzq), 0);
+  capaBaseIzq.splitDirection = Cesium.SplitDirection.LEFT;
+  if (capaBase) capaBase.splitDirection = Cesium.SplitDirection.RIGHT;
+  $('etqIzq').textContent = ESTADO.anioIzq;
+  $('etqDer').textContent = MAPAS.anioS2(ESTADO.anio);
+}
+
+/* -------------------------------------------------------- comparación de años */
+async function ponerComparacion(activo) {
+  ESTADO.comparar = activo;
+  $('etiquetasSplit').classList.toggle('on', activo);
+  $('sliderSplit').classList.toggle('on', activo);
+  const btn = $('btnComparar'); if (btn) btn.classList.toggle('activo', activo);
+  if (!activo) {
+    viewer.scene.splitPosition = undefined;
+    if (capaBaseIzq) { viewer.imageryLayers.remove(capaBaseIzq, true); capaBaseIzq = null; }
+    if (capaBase) capaBase.splitDirection = Cesium.SplitDirection.NONE;
+    return;
+  }
+  if (ESTADO.base !== 's2') await ponerBase('s2', ESTADO.anio);
+  asegurarSplitIzq();
+  viewer.scene.splitPosition = 0.5;
+  $('posSplit').value = 50;
+  actualizarChips();
+}
+function ponerRelieve(activo) {
+  ESTADO.relieve = activo;
+  try {
+    viewer.terrainProvider = activo ? MAPAS.proveedorRelieve() : new Cesium.EllipsoidTerrainProvider();
+  } catch (e) {
+    console.error('relieve:', e);
+    $('notaFondo').innerHTML = 'No se pudo activar el relieve 3D: ' + e.message;
+  }
+}
+
+/* ------------------------------------------------------ capas del proyecto */
+function prepararCapas() {
+  const estiloBloques = {
+    stroke: Cesium.Color.fromCssColorString('#8b7cf6').withAlpha(0.9),
+    strokeWidth: 2, fill: Cesium.Color.fromCssColorString('rgba(139,124,246,0.06)')
+  };
+  const estiloReserva = {
+    stroke: Cesium.Color.fromCssColorString('#2dd4bf'), strokeWidth: 2.4,
+    fill: Cesium.Color.fromCssColorString('rgba(45,212,191,0.05)')
+  };
+  Promise.all([
+    fetch('data/aoi.geojson').then(r => r.json()).then(g => Cesium.GeoJsonDataSource.load(g, estiloBloques))
+      .then(ds => { dsBloques = ds; viewer.dataSources.add(ds);
+        ds.entities.values.forEach(e => {
+          const b = (e.properties.capa && e.properties.capa.getValue()) || '';
+          if (CSS_BLOQUE[b] && e.polygon) {
+            e.polygon.material = Cesium.Color.fromCssColorString(CSS_BLOQUE[b]).withAlpha(0.16);
+            e.polygon.outline = true;
+            e.polygon.outlineColor = Cesium.Color.fromCssColorString(CSS_BLOQUE[b]);
+            e.polygon.outlineWidth = 1.4;
+          }
+          if (DATOS.bloques[b]) {
+            e.properties.bloque = new Cesium.ConstantProperty(b);
+            e.properties.ficha = new Cesium.ConstantProperty(DATOS.bloques[b]);
+          }
+        });
+        return ds; }),
+    fetch('data/rfi_boundary.geojson').then(r => r.json()).then(g => {
+      window.ANILLO_RFI = (g.features[0].geometry.type === 'Polygon') ?
+        g.features[0].geometry.coordinates[0] : g.features[0].geometry.coordinates[0][0];
+    }).catch(() => {}),
+    fetch('data/reserva_imataca.geojson').then(r => r.json()).then(g => Cesium.GeoJsonDataSource.load(g, estiloReserva))
+      .then(ds => { dsReserva = ds; viewer.dataSources.add(ds); return ds; })
+  ]).then(() => {
+    construirListaBloques(); construirAnios(); construirFondos();
+    irAReserva();
+    const p = viewer.scene.globe.tileLoadProgressEvent;
+    const quitar = p.addEventListener(() => {});
+    setTimeout(() => p.removeEventListener(quitar), 3000);
+  }).catch(e => {
+    console.error('capas:', e);
+    $('carga').classList.add('oculto');
+  });
+}
+
+/* ------------------------------------------------------------- navegación */
+function atenuar(b) {
+  if (!dsBloques) return;
+  dsBloques.entities.values.forEach(e => {
+    const nb = e.properties.bloque && e.properties.bloque.getValue();
+    if (!nb || !e.polygon) return;
+    // relleno tenue: el contorno identifica el bloque sin alterar los colores temáticos
+    const alfa = !b ? 0.05 : (nb === b ? 0.12 : 0.02);
+    e.polygon.material = Cesium.Color.fromCssColorString(CSS_BLOQUE[nb]).withAlpha(alfa);
+  });
+}
+function volarReserva() {
+  detenerTour(); ESTADO.bloque = null; ESTADO.clase = null;
+  document.querySelectorAll('#listaBloques .bloque').forEach(x => x.classList.remove('activo'));
+  $('btnReserva').classList.add('activo');
+  $('chipNivel').textContent = 'RESERVA';
+  atenuar(null);
+  if (dsReserva) viewer.flyTo(dsReserva, {duration:2.4, offset:new Cesium.HeadingPitchRange(0, -Cesium.Math.PI_OVER_TWO, 760000)});
+  irAReserva();
+}
+function seleccionar(b) {
+  if (ESTADO.fuente === 'lnd') cambiarFuente('s2');   // el detalle por bloque es Sentinel-2
+  ESTADO.bloque = b; ESTADO.clase = null;
+  $('btnReserva').classList.remove('activo');
+  document.querySelectorAll('#listaBloques .bloque').forEach(x => x.classList.toggle('activo', x.dataset.b === b));
+  $('chipNivel').textContent = b;
+  atenuar(b);
+  const ent = dsBloques && dsBloques.entities.values.find(e =>
+    (e.properties.bloque && e.properties.bloque.getValue()) === b);
+  if (ent) viewer.flyTo(ent, {duration:2, offset:new Cesium.HeadingPitchRange(0, -Cesium.Math.PI_OVER_TWO, 250000)});
+  irABloque(b);
+  actualizarMini();
+}
+
+/* -------------------------------------------------- animaciones de la serie */
+function detenerTour() {
+  if (!ESTADO.tour) return;
+  ESTADO.tour = false; $('btnTour').innerHTML = '<span class="ic">▶</span> RECORRIDO GUIADO';
+}
+async function recorrido() {
+  if (ESTADO.tour) { detenerTour(); return; }
+  pararSerie();
+  ESTADO.tour = true;
+  $('btnTour').innerHTML = '<span class="ic">■</span> DETENER RECORRIDO';
+  volarReserva();
+  await dormir(5200);
+  for (const b of Object.keys(DATOS.bloques)) {
+    if (!ESTADO.tour) return detenerTour();
+    seleccionar(b);
+    await dormir(5200);
+  }
+  if (ESTADO.tour) volarReserva();
+  detenerTour();
+}
+function pararSerie() {
+  if (ESTADO.reprod) { clearInterval(ESTADO.reprod); ESTADO.reprod = null; }
+  const b = $('btnReproducir'); if (b) b.innerHTML = '<span class="ic">▶</span> RECORRIDO MULTITEMPORAL';
+}
+function aniosDeFuente() {
+  return ESTADO.fuente === 's2' ? ANIOS : ((DATOS.landsat && DATOS.landsat.anios) || []);
+}
+function cambiarFuente(f) {
+  if (ESTADO.fuente === f) return;
+  pararSerie(); detenerTour();
+  if (ESTADO.comparar) ponerComparacion(false);
+  ESTADO.fuente = f;
+  const rango = aniosDeFuente();
+  ESTADO.anio = rango.reduce((m, a) => (Math.abs(a - ESTADO.anio) < Math.abs(m - ESTADO.anio) ? a : m), rango[0]);
+  construirAnios();
+  if (f === 'lnd') {
+    irAReservaLandsat();
+    refrescarCoberturaLnd();
+    leyendaLndEstatica();
+  }
+  else {
+    if (LEY && LEY.tipo === 'lnd') { $('leyenda').style.display = 'none'; LEY = null; }
+    if (ESTADO.bloque) seleccionar(ESTADO.bloque);
+    else irAReserva();
+  }
+  actualizarMini(); actualizarChips();
+}
+function reproducir() {
+  if (ESTADO.reprod) { pararSerie(); return; }
+  detenerTour();
+  $('btnReproducir').innerHTML = '<span class="ic">■</span> DETENER';
+  const anios = aniosDeFuente();
+  let i = anios.indexOf(ESTADO.anio);
+  if (i >= anios.length - 1) i = -1;
+  ESTADO.reprod = setInterval(() => {
+    i++;
+    if (i >= anios.length) { pararSerie(); return; }
+    cambiarAnio(anios[i]);
+  }, 900);
+}
+function cambiarAnio(a) {
+  ESTADO.anio = a;
+  document.querySelectorAll('#tiraAnios .anio').forEach(x => x.classList.toggle('act', +x.dataset.a === a));
+  if (ESTADO.fuente === 's2') {
+    if (ESTADO.base === 's2') ponerBase('s2', a);
+    if (ESTADO.comparar) { $('etqDer').textContent = MAPAS.anioS2(a); }
+    if (ESTADO.bloque) { if (ESTADO.clase) irAClase(ESTADO.clase); else irABloque(ESTADO.bloque); }
+    else irAReserva();
+  } else {
+    irAReservaLandsat();
+    refrescarCoberturaLnd();
+  }
+  actualizarMini(); actualizarChips();
+}
+
+/* ------------------------------------------------------------ lista y fondos */
+function construirListaBloques() {
+  const caja = $('listaBloques'); caja.innerHTML = '';
+  Object.keys(DATOS.bloques).forEach(b => {
+    const d = DATOS.bloques[b];
+    const div = document.createElement('div');
+    div.className = 'bloque'; div.dataset.b = b;
+    div.innerHTML = '<span class="pt" style="background:' + CSS_BLOQUE[b] + '"></span>' +
+      '<span class="nb">' + b + '</span><span class="ha">' + nf(d.area_ha) + ' ha</span>';
+    div.onclick = () => { detenerTour(); seleccionar(b); };
+    caja.appendChild(div);
+  });
+}
+function construirAnios() {
+  const tira = $('tiraAnios'); tira.innerHTML = '';
+  const esS2 = ESTADO.fuente === 's2';
+  aniosDeFuente().forEach(a => {
+    const s = document.createElement('div');
+    const sinImagen = esS2 && !MAPAS.hayMosaico(a);
+    s.className = 'anio' + (a === ESTADO.anio ? ' act' : '') + (sinImagen ? ' futuro' : '');
+    s.dataset.a = a;
+    s.innerHTML = a + (sinImagen ? '<span class="pt">*</span>' : '');
+    s.title = !esS2 ? 'RFI Landsat ' + a + ' · clasificación del territorio'
+      : (sinImagen ? 'Sin mosaico Sentinel-2 de ' + a + ' en esta zona: se muestra ' + MAPAS.anioS2(a)
+                   : 'Mosaico Sentinel-2 de ' + a);
+    s.onclick = () => { pararSerie(); cambiarAnio(a); };
+    tira.appendChild(s);
+  });
+  $('tituloSerie').textContent = esS2 ? '▤ SERIE MULTITEMPORAL · SENTINEL-2 2017-2026'
+    : '▤ SERIE MULTITEMPORAL · RFI LANDSAT 1985-2024';
+  $('pieAnios').innerHTML = esS2
+    ? 'Serie de muestreo anual (4.000 puntos/bloque). <b>2026 es parcial</b> (compuesto hasta septiembre).'
+    : 'Clasificación MapBiomas · Landsat 30 m sobre el recorte RFI. Requiere conexión.';
+  const ctr = $('controlesSerie');
+  const aniosLnd = (DATOS.landsat && DATOS.landsat.anios) || [];
+  ctr.innerHTML =
+    '<div class="accion' + (esS2 ? ' activo' : '') + '" id="btnFS2" title="Serie Sentinel-2 del proyecto (2017-2026)">SENTINEL-2</div>' +
+    '<div class="accion' + (esS2 ? '' : ' activo') + '" id="btnFLnd" title="Serie Landsat/MapBiomas (1985-2024)">RFI-LANDSAT</div>' +
+    (esS2 ?
+      '<div class="accion" id="btnReproducir" style="flex-basis:100%"><span class="ic">▶</span> RECORRIDO MULTITEMPORAL</div>' +
+      '<div class="accion" id="btnComparar" style="margin:0"><span class="ic">⑃</span> COMPARAR AÑOS</div>' +
+      '<select id="anioIzq" class="accion" style="margin:0;padding:7px 9px;background:var(--glass2);color:var(--txt)">' +
+      MAPAS.ANIOS_S2.map(a => '<option value="' + a + '">' + a + '</option>').join('') + '</select>'
+    :
+      '<div class="accion" id="btnReproducir" style="flex-basis:100%"><span class="ic">▶</span> RECORRIDO MULTITEMPORAL</div>' +
+      '<div class="accion" id="btnComparar" style="margin:0"><span class="ic">⑃</span> COMPARAR AÑOS</div>');
+  if (esS2) {
+    $('anioIzq').value = ESTADO.anioIzq;
+    $('anioIzq').onchange = ev => {
+      ESTADO.anioIzq = +ev.target.value;
+      if (ESTADO.comparar) ponerComparacion(true);
+    };
+    $('btnReproducir').onclick = reproducir;
+    $('btnComparar').onclick = () => ponerComparacion(!ESTADO.comparar);
+    EFECTOS.magnet($('btnReproducir'), 0.2);
+    EFECTOS.magnet($('btnComparar'), 0.2);
+  } else {
+    $('btnReproducir').onclick = reproducir;
+    $('btnComparar').onclick = alternarComparacionLnd;
+  }
+  $('btnFS2').onclick = () => cambiarFuente('s2');
+  $('btnFLnd').onclick = () => { if (DATOS.landsat) cambiarFuente('lnd'); };
+}
+function construirFondos() {
+  const caja = $('listaFondos'); caja.innerHTML = '';
+  MAPAS.CATALOGO.forEach((f, i) => {
+    const lab = document.createElement('label');
+    lab.className = 'fila';
+    lab.innerHTML = '<input type="radio" name="fondo" value="' + f.id + '"' +
+      (f.id === ESTADO.base ? ' checked' : '') + '>' +
+      '<span class="nom">' + f.nombre + '<span class="sub">' + f.nota + '</span></span>';
+    lab.querySelector('input').onchange = () => {
+      ponerBase(f.id, ESTADO.anio).then(() => { if (ESTADO.comparar) ponerComparacion(true); });
+    };
+    caja.appendChild(lab);
+  });
+}
+function actualizarChips() {
+  const f = MAPAS.CATALOGO.find(c => c.id === ESTADO.base);
+  $('chipFondo').textContent = ESTADO.base === 's2' ? 'Sentinel-2 ' + MAPAS.anioS2(ESTADO.anio) : (f ? f.nombre : '—');
+  $('chipAnio').textContent = ESTADO.anio;
+  $('chipAlt').textContent = viewer ? Math.round(viewer.camera.positionCartographic.height).toLocaleString('es') + ' m' : '—';
+}
+function actualizarMini() {
+  const mini = document.querySelector('#lineaTiempo .mini');
+  if (ESTADO.fuente === 'lnd') {
+    const L = DATOS.landsat, i = Math.max(0, L.anios.indexOf(ESTADO.anio));
+    const v = c => L.serie[c][i];
+    mini.innerHTML =
+      '<div>AÑO RFI LANDSAT<b id="mAnio">' + ESTADO.anio + '</b></div>' +
+      '<div>BOSQUE<b class="cian" id="mVeg">' + nf(v('3')) + ' ha</b></div>' +
+      '<div>BOSQUE INUNDABLE<b id="mDensa">' + nf(v('6')) + ' ha</b></div>' +
+      '<div>USO MINERO<b id="mNdvi">' + nf(v('30')) + ' ha</b></div>' +
+      '<div id="mAlcance">RECORTE<b>3,79 M ha</b></div>';
+    return;
+  }
+  const d = ESTADO.bloque ? DATOS.bloques[ESTADO.bloque] : DATOS.reserva;
+  const s = (d.serie || []).find(x => x.anio === ESTADO.anio) || (d.serie || [])[0];
+  if (!s) return;
+  $('mAnio').textContent = ESTADO.anio + (ESTADO.anio > 2025 ? ' *' : '');
+  $('mVeg').textContent = nf(s.veg_ha) + ' ha';
+  $('mDensa').textContent = nf(s.densa_ha) + ' ha';
+  $('mNdvi').textContent = nf(s.ndvi, 3);
+  $('mAlcance').innerHTML = 'UNIDAD<b>' + (ESTADO.bloque || 'RESERVA') + '</b>';
+}
+
+/* ============================ PANEL DE ESTADÍSTICAS ======================= */
+function kpi(valor, etiqueta, o) {
+  o = o || {};
+  return '<div class="kpi card-spotlight' + (o.clase ? ' ' + o.clase : '') + '">' +
+    '<div class="v" data-v="' + valor + '" data-d="' + (o.dec || 0) + '" data-s="' + (o.sufijo || '') + '">0</div>' +
+    '<div class="k">' + etiqueta + '</div></div>';
+}
+function animarKpis() {
+  $('stats').querySelectorAll('.kpi .v').forEach(el => {
+    EFECTOS.contar(el, el.dataset.v === '' ? null : Number(el.dataset.v), +el.dataset.d, el.dataset.s);
+  });
+}
+function migas(niveles) {
+  return '<div class="migas">' + niveles.map((n, i) => {
+    const ult = i === niveles.length - 1;
+    const t = ult ? '<span class="act">' + n.t + '</span>' :
+      '<span class="cr" data-ir="' + n.ir + '">' + n.t + '</span>';
+    return (i ? '<span class="sep">›</span>' : '') + t;
+  }).join('') + '</div>';
+}
+function pintar(html, niveles, animarTitulo) {
+  $('stats').innerHTML = migas(niveles) + '<div class="nivelEnt">' + html + '</div>';
+  animarKpis();
+  pintarRellenos();
+  const ult = $('stats').querySelector('.migas .act');
+  if (ult && animarTitulo !== false) EFECTOS.decrypted(ult, ult.textContent, { velocidad: 16, revelado: 62 });
+  $('stats').querySelectorAll('.migas .cr').forEach(el => {
+    el.onclick = () => {
+      const ir = el.dataset.ir;
+      if (ir === 'reserva') volarReserva();
+      else if (ir === 'n2') irAN2();
+      else if (ir.indexOf('lnd:') === 0) abrirClaseLandsat(+ir.split(':')[1]);
+      else if (ir.indexOf('bloque:') === 0) { detenerTour(); seleccionar(ir.split(':')[1]); }
+      else if (ir.indexOf('clase:') === 0) { const p = ir.split(':'); ESTADO.clase = +p[2]; seleccionar(p[1]); irAClase(+p[2]); }
+    };
+  });
+}
+function pintarRellenos() {
+  requestAnimationFrame(() => $('stats').querySelectorAll('.rell').forEach(r => { r.style.width = r.dataset.w + '%'; }));
+}
+function barrasClases(clases) {
+  const max = Math.max.apply(null, clases.map(c => c.ha)) || 1;
+  return clases.map(c =>
+    '<div class="barra' + (ESTADO.clase === c.codigo ? ' sel' : '') + '" data-clase="' + c.codigo + '">' +
+    '<div class="rot"><span class="sw" style="background:#' + c.color + '"></span><span>' + c.nombre + '</span>' +
+    '<span class="ha">' + nf(c.ha) + ' ha · ' + nf(c.pct, 1) + ' %</span></div>' +
+    '<div class="pista"><div class="rell" style="background:#' + c.color + '" data-w="' +
+    Math.max(0.6, 100 * c.ha / max).toFixed(1) + '"></div></div></div>').join('');
+}
+function grafico(anios, valores, errores, color, etiqueta, dec) {
+  const W = 300, H = 116, mL = 36, mR = 8, mT = 10, mB = 20;
+  const lim = valores.filter(v => v !== null && v !== undefined && !isNaN(v));
+  if (!lim.length) return '';
+  let vmin = Math.min.apply(null, lim), vmax = Math.max.apply(null, lim);
+  const err = (errores || []).filter(e => e);
+  if (err.length) {
+    vmin = Math.min(vmin, Math.min.apply(null, lim.map((v, i) => v - (errores[i] || 0))));
+    vmax = Math.max(vmax, Math.max.apply(null, lim.map((v, i) => v + (errores[i] || 0))));
+  }
+  const mar = (vmax - vmin) * 0.18 || 0.02; vmin -= mar; vmax += mar;
+  if (vmin < 0 && Math.min.apply(null, lim) >= 0) vmin = 0;
+  const paso = anios.length > 1 ? (W - mL - mR) / (anios.length - 1) : 0;
+  const x = i => mL + (anios.length > 1 ? i * paso : (W - mL - mR) / 2);
+  const y = v => mT + (H - mT - mB) * (1 - (v - vmin) / (vmax - vmin));
+  let g = '<svg viewBox="0 0 ' + W + ' ' + H + '">';
+  [0, 0.5, 1].forEach(f => {
+    const v = vmin + f * (vmax - vmin);
+    g += '<line x1="' + mL + '" y1="' + y(v) + '" x2="' + (W - mR) + '" y2="' + y(v) + '" stroke="rgba(255,255,255,.07)"/>' +
+      '<text class="eje" x="' + (mL - 4) + '" y="' + (y(v) + 3) + '" text-anchor="end">' +
+      (dec ? v.toFixed(dec) : Math.round(v).toLocaleString('es-ES')) + '</text>';
+  });
+  if (err.length === lim.length) {
+    const sup = valores.map((v, i) => x(i) + ',' + y(v + (errores[i] || 0))).join(' ');
+    const inf = valores.map((v, i) => x(i) + ',' + y(v - (errores[i] || 0))).reverse().join(' ');
+    g += '<polygon points="' + sup + ' ' + inf + '" fill="' + color + '" opacity="0.15"/>';
+  }
+  g += '<polyline points="' + valores.map((v, i) => x(i) + ',' + y(v)).join(' ') + '" fill="none" stroke="' + color +
+    '" stroke-width="2" stroke-linejoin="round" stroke-dasharray="1400" stroke-dashoffset="1400">' +
+    '<animate attributeName="stroke-dashoffset" from="1400" to="0" dur="1s" fill="freeze"/></polyline>';
+  valores.forEach((v, i) => {
+    const act = anios[i] === ESTADO.anio;
+    g += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="' + (act ? 3.4 : 2) + '" fill="' + (act ? '#ff8a4c' : color) + '"/>';
+  });
+  const ia = anios.indexOf(ESTADO.anio);
+  if (ia >= 0) {
+    g += '<line x1="' + x(ia) + '" y1="' + mT + '" x2="' + x(ia) + '" y2="' + (H - mB) +
+      '" stroke="#ff8a4c" stroke-width="1" stroke-dasharray="3 3" opacity=".85"/>' +
+      '<text class="act" x="' + x(ia) + '" y="' + (H - 6) + '" text-anchor="middle">' + ESTADO.anio + '</text>';
+  }
+  if (anios.length > 1) [0, Math.floor(anios.length / 2), anios.length - 1].forEach(i => {
+    if (ia >= 0 && Math.abs(i - ia) < 2) return;
+    g += '<text class="eje" x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + anios[i] + '</text>';
+  });
+  if (anios.length === 1) {
+    g += '<text class="eje" x="' + x(0) + '" y="' + (H - 6) + '" text-anchor="middle">' + anios[0] + '</text>';
+  }
+  return '<div class="chart"><h3>' + etiqueta + '</h3>' + g + '</svg></div>';
+}
+function compararBloques(fn, color, etiqueta, unidad) {
+  const filas = Object.keys(DATOS.bloques).map(b => ({b, v: fn(DATOS.bloques[b])}))
+    .filter(f => f.v !== null && f.v !== undefined);
+  const max = Math.max.apply(null, filas.map(f => f.v)) || 1;
+  return '<h3>' + etiqueta + '</h3>' + filas.map(f =>
+    '<div class="barra' + (f.b === ESTADO.bloque ? ' sel' : '') + '" data-bloque="' + f.b + '">' +
+    '<div class="rot"><span class="sw" style="background:' + CSS_BLOQUE[f.b] + '"></span><span>' + f.b + '</span>' +
+    '<span class="ha">' + nf(f.v) + (unidad || '') + '</span></div>' +
+    '<div class="pista"><div class="rell" style="background:' + color + '" data-w="' +
+    (100 * f.v / max).toFixed(1) + '"></div></div></div>').join('');
+}
+
+/* nivel 1 · reserva */
+function irAReserva() {
+  if (ESTADO.fuente === 'lnd') return irAReservaLandsat();
+  const r = DATOS.reserva, f = r.fao;
+  const s = r.serie.find(x => x.anio === ESTADO.anio) || r.serie[r.serie.length - 1];
+  let h = '<h3>Reserva Forestal de Imataca · ' + ESTADO.anio + '</h3>';
+  h += '<div class="kpis">' +
+    kpi(r.area_ha, 'Superficie (unión)', {dec:0, sufijo:' ha'}) +
+    kpi(s.veg_ha, 'Con vegetación (NDVI ≥ 0,50)', {dec:0, sufijo:' ha', clase:'fuerte'}) +
+    kpi(s.densa_ha, 'Vegetación densa (NDVI ≥ 0,70)', {dec:0, sufijo:' ha'}) +
+    kpi(s.ndvi, 'NDVI medio', {dec:3}) + '</div>';
+  h += '<h3>Bosque bajo definición FAO</h3><div class="kpis">' +
+    kpi(f.central_ha, 'Estimación central', {dec:0, sufijo:' ha', clase:'fuerte'}) +
+    kpi(f.central_pct, 'De la reserva', {dec:1, sufijo:' %'}) +
+    kpi(f.inferior_ha, 'Cota inferior', {dec:0, sufijo:' ha'}) +
+    kpi(f.superior_ha, 'Cota superior', {dec:0, sufijo:' ha'}) + '</div>';
+  h += '<h3>Contexto</h3><div class="kpis">' +
+    kpi(f.denso_ndvi_ha, 'Vegetación densa 2025 (referencia)', {dec:0, sufijo:' ha'}) +
+    kpi(s.n_muestras, 'Puntos muestreados', {dec:0}) + '</div>';
+  h += grafico(r.anios, r.ndvi, r.serie.map(x => x.ndvi_se), '#00d4ff',
+    'NDVI medio de la reserva (banda = ±1 error estándar)', 2);
+  h += grafico(r.anios, r.veg_ha.map(v => v / 1000), null, '#8b7cf6',
+    'Superficie con vegetación (miles de ha)', 0);
+  h += '<div class="nota2"><b>' + f.metodo + '</b><br>El criterio FAO (copa ≥ 10 %, altura ≥ 5 m, ' +
+    'superficie ≥ 0,5 ha) se aplica sobre la clasificación supervisada de 2025. El bosque denso medido solo ' +
+    'por NDVI (≥ 0,70) es de ' + nf(f.denso_ndvi_ha) + ' ha (' + nf(f.denso_ndvi_pct, 2) + ' %): la diferencia ' +
+    'de ~200.000 ha corresponde a vegetación abierta de transición a sabana, concentrada en los bloques norteños.</div>';
+  h += '<div class="nota2 aviso"><b>Solapes:</b> ' + r.nota_solapes + ' <b>Elija un bloque</b> para cifras directas.</div>';
+  h += '<div class="fuente">Fuente: ' + DATOS.fuentes[3] + '</div>';
+  pintar(h, [{t:'Reserva', ir:'reserva'}]);
+}
+
+/* nivel 2 · bloque */
+function irABloque(b) {
+  const d = DATOS.bloques[b], fao = d.fao2025;
+  const s = d.serie.find(x => x.anio === ESTADO.anio) || d.serie[d.serie.length - 1];
+  let h = '<h3>Bloque ' + b + ' · ' + nf(d.area_ha) + ' ha</h3>';
+  h += '<div class="kpis">' +
+    kpi(s.veg_ha, 'Con vegetación · ' + ESTADO.anio, {dec:0, sufijo:' ha', clase:'fuerte'}) +
+    kpi(s.densa_ha, 'Vegetación densa · ' + ESTADO.anio, {dec:0, sufijo:' ha'}) +
+    kpi(s.ndvi, 'NDVI medio · ' + ESTADO.anio, {dec:3}) +
+    kpi(s.kndvi, 'kNDVI medio · ' + ESTADO.anio, {dec:3}) + '</div>';
+  if (fao) {
+    h += '<h3>Uso y cobertura del suelo · FAO ' + fao.anio + '</h3><div class="kpis">' +
+      kpi(fao.bosque_fao_ha, 'Bosque FAO', {dec:0, sufijo:' ha', clase:'fuerte'}) +
+      kpi(fao.bosque_fao_pct, 'Del bloque', {dec:1, sufijo:' %'}) +
+      kpi(fao.kappa, 'Kappa (validación)', {dec:3}) +
+      kpi(fao.n_puntos, 'Puntos de entrenamiento', {dec:0}) + '</div>';
+    h += '<h3>Clases (clic para el detalle)</h3>' + barrasClases(fao.clases);
+  }
+  h += grafico(d.anios, d.series.ndvi, d.serie.map(x => x.ndvi_se), CSS_BLOQUE[b],
+    'NDVI medio (banda = ±1 error estándar)', 2);
+  h += grafico(d.anios, d.series.densa_ha.map(v => v / 1000), d.serie.map(x => (x.densa_se || 0) / 1000),
+    '#ff8a4c', 'Vegetación densa (miles de ha)', 0);
+  if (fao) h += '<div class="nota2">Clasificación supervisada (Random Forest, definición FAO) validada con ' +
+    'exactitud global ' + nf(100 * fao.exactitud, 1) + ' % y kappa ' + nf(fao.kappa, 3) + ' sobre ' +
+    nf(fao.n_puntos) + ' puntos. El error estándar de cada clase se reporta en el detalle.</div>';
+  if (b === 'P6' && DATOS.capaP6) {
+    const c = DATOS.capaP6;
+    h += '<h3>Capa espacial entregada · P6</h3><table class="mini2"><tr><th>Clase</th><th class="n">ha</th>' +
+      '<th class="n">%</th></tr>' + c.clases.filter(x => x.ha > 0).map(x =>
+      '<tr><td><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#' + x.color +
+      '"></span> ' + x.nombre + '</td><td class="n">' + nf(x.ha) + '</td><td class="n">' + nf(x.pct, 2) +
+      '</td></tr>').join('') + '</table>';
+    h += '<div class="nota2 aviso"><b>Advertencia de integridad:</b> ' + c.nota_integridad + '</div>';
+  }
+  h += '<div class="fuente">Fuente: ' + DATOS.fuentes[3] + '</div>';
+  pintar(h, [{t:'Reserva', ir:'reserva'}, {t:b, ir:'bloque:' + b}]);
+  $('stats').querySelectorAll('.barra[data-clase]').forEach(el => {
+    el.onclick = () => irAClase(+el.dataset.clase);
+  });
+}
+
+/* nivel 3 · clase */
+const CLASES_CON_SERIE = {1:'bosque_ha', 2:'otra_veg_ha', 5:'sin_veg_ha'};
+function irAClase(codigo) {
+  const b = ESTADO.bloque; if (!b) return;
+  ESTADO.clase = codigo;
+  const d = DATOS.bloques[b], fao = d.fao2025;
+  const c = fao.clases.find(x => x.codigo === codigo);
+  if (!c) return;
+  const nombre = (DATOS.clasesFao.find(x => x.codigo === codigo) || {}).nombre || c.nombre;
+  let h = '<h3>' + nombre + ' · bloque ' + b + '</h3>';
+  h += '<div class="kpis">' +
+    kpi(c.ha, 'Superficie ' + fao.anio, {dec:0, sufijo:' ha', clase:'fuerte'}) +
+    kpi(c.pct, 'Del bloque', {dec:2, sufijo:' %'}) +
+    kpi(1.96 * (c.se_ha || 0), 'Margen (95 %)', {dec:0, sufijo:' ha'}) +
+    kpi(c.se_ha, 'Error estándar', {dec:0, sufijo:' ha'}) + '</div>';
+  h += compararBloques(dd => {
+    const f = dd.fao2025; if (!f) return null;
+    const k = f.clases.find(x => x.codigo === codigo);
+    return k ? k.ha : 0;
+  }, '#' + (c.color || '888888'), '«' + nombre + '» en cada bloque (ha)', ' ha');
+  const col = CLASES_CON_SERIE[codigo];
+  if (col) {
+    h += grafico(d.coberturas.map(x => x.anio), d.coberturas.map(x => x[col]),
+      d.coberturas.map(x => x[col.replace('_ha', '_se_ha')] || 0), '#' + (c.color || '888888'),
+      nombre + ' por año (ha · banda = ±1 error estándar)', 0);
+    const s = d.coberturas.find(x => x.anio === ESTADO.anio);
+    if (s) h += '<div class="nota2">En <b>' + ESTADO.anio + '</b>: ' + nf(s[col]) + ' ha (' +
+      nf(100 * s[col] / (d.area_ha || 1), 2) + ' % del bloque), error estándar ±' +
+      nf(s[col.replace('_ha', '_se_ha')] || 0) + ' ha.</div>';
+  } else {
+    h += '<div class="nota2">Esta clase proviene de la <b>clasificación de ' + fao.anio + '</b>: la serie anual ' +
+      '2017-2026 se construye con la regla de umbrales de NDVI (bosque ≥ 0,70 · otra vegetación 0,50-0,70 · ' +
+      'sin vegetación &lt; 0,50) más la máscara de agua JRC, por lo que no discrimina «' + nombre + '» año a año.</div>';
+  }
+  h += '<div class="fuente">Clase derivada de la clasificación supervisada FAO ' + fao.anio + ' del bloque ' + b +
+    ' (' + nf(fao.n_puntos) + ' puntos · kappa ' + nf(fao.kappa, 3) + ').</div>';
+  pintar(h, [{t:'Reserva', ir:'reserva'}, {t:b, ir:'bloque:' + b}, {t:nombre, ir:'clase:' + b + ':' + codigo}]);
+  $('stats').querySelectorAll('.barra[data-bloque]').forEach(el => {
+    el.onclick = () => { ESTADO.clase = codigo; seleccionar(el.dataset.bloque); irAClase(codigo); };
+  });
+}
+
+/* tipología N2 · estadísticas por clase (la capa ráster aún no está publicada) */
+function irAN2() {
+  if (!DATOS.n2) return;
+  const clases = DATOS.n2.clases.slice().sort((a, b) => b.ha - a.ha);
+  const total = clases.reduce((s, c) => s + c.ha, 0);
+  const max = clases[0].ha || 1;
+  let h = '<h3>Tipología ecológica N2</h3>';
+  h += '<div class="kpis">' +
+    kpi(total, 'Superficie clasificada', {dec:0, sufijo:' ha', clase:'fuerte'}) +
+    kpi(clases.length, 'Clases ecológicas', {dec:0}) +
+    kpi(clases[0].ha, clases[0].nombre, {dec:0, sufijo:' ha'}) +
+    kpi(clases[0].pct, 'Clase mayoritaria', {dec:1, sufijo:' %'}) + '</div>';
+  h += '<h3>Clases (área geodésica)</h3>' + clases.map(c =>
+    '<div class="barra"><div class="rot"><span class="sw" style="background:#' + c.color + '"></span>' +
+    '<span>' + c.nombre + '</span><span class="ha">' + nf(c.ha) + ' ha · ' + nf(c.pct, 1) + ' %</span></div>' +
+    '<div class="pista"><div class="rell" style="background:#' + c.color + '" data-w="' +
+    Math.max(0.6, 100 * c.ha / max).toFixed(1) + '"></div></div></div>').join('');
+  h += '<div class="nota2"><b>Fuente:</b> ' + DATOS.n2.fuente + '. ' + DATOS.n2.nota + '</div>';
+  h += '<div class="fuente">El área N2 (7,79-8,64° N) es el sector norte de la reserva y queda ' +
+    'fuera de los bloques P1-P6, por eso se consulta aparte del drill-down de bloques.</div>';
+  pintar(h, [{t:'Reserva', ir:'reserva'}, {t:'Tipología N2', ir:'n2'}]);
+}
+
+/* ================= RFI-LANDSAT · serie y capas vectoriales ================= */
+/* Sección reconstruida: usa las capas vectoriales originales del proyecto
+   (límite de la reserva, bloques P1-P6, polígono RFI y tipología N2) con una
+   leyenda simple no dinámica. Las cifras provienen de la serie MapBiomas
+   (Landsat 30 m) validada en atlas_datos.py. */
+const CMP = { a: 1985 };
+
+function leyendaLndEstatica() {
+  LEY = null;
+  const L = DATOS.landsat;
+  const i = Math.max(0, L.anios.indexOf(ESTADO.anio));
+  const caja = $('leyenda');
+  caja.querySelector('h2').childNodes[0].nodeValue = '◧ RFI LANDSAT ' + ESTADO.anio + ' · TIPOLOGÍAS';
+  const orden = L.clases.map(c => ({...c, ha: L.serie[c.codigo][i]})).sort((a, b) => b.ha - a.ha);
+  $('leyendaItems').innerHTML = orden.map(c =>
+    '<div class="litem"><span class="sw" style="background:#' + c.color + '"></span>' + c.nombre +
+    '<span style="margin-left:auto;font-family:var(--mono);font-size:9px;color:#9AA0C3">' +
+    nf(c.ha) + ' ha · #' + c.color + '</span></div>').join('') +
+    '<div class="item" style="color:#9AA0C3;font-size:9px">Recorte RFI · Landsat 30 m · MapBiomas ' + ESTADO.anio + '</div>';
+  caja.style.display = 'flex';
+  caja.classList.remove('plegado');
+  posicionarLeyenda();
+}
+function leyendaRFI() {
+  LEY = null;
+  const caja = $('leyenda');
+  caja.querySelector('h2').childNodes[0].nodeValue = '◧ RFI-LANDSAT · CAPAS VECTORIALES';
+  let h = '<div class="litem"><span class="sw" style="background:#2dd4bf"></span>Límite de la reserva</div>' +
+    '<div class="litem"><span class="sw" style="background:#ffa07a"></span>Polígono RFI Landsat</div>';
+  Object.keys(CSS_BLOQUE).forEach(b => {
+    h += '<div class="litem"><span class="sw" style="background:' + CSS_BLOQUE[b] + '"></span>Bloque ' + b + '</div>';
+  });
+  h += '<div class="litem" style="margin-top:6px;color:#9AA0C3;font-size:9px">Tipología N2 · 30 m</div>';
+  (DATOS.n2 ? DATOS.n2.clases : []).forEach(c => {
+    h += '<div class="litem"><span class="sw" style="background:#' + c.color + '"></span>' + c.nombre + '</div>';
+  });
+  $('leyendaItems').innerHTML = h;
+  caja.style.display = 'flex';
+  caja.classList.remove('plegado');
+  posicionarLeyenda();
+}
+function irAReservaLandsat() {
+  const L = DATOS.landsat;
+  const i = Math.max(0, L.anios.indexOf(ESTADO.anio));
+  const v = c => L.serie[c][i];
+  const bosque0 = L.serie['3'][0];
+  let h = '<h3>RFI-LANDSAT · Imataca ' + ESTADO.anio + '</h3>';
+  h += '<div class="kpis">' +
+    kpi(v('3'), 'Bosque (3)', {dec: 0, sufijo: ' ha', clase: 'fuerte'}) +
+    kpi(v('6'), 'Bosque inundable (6)', {dec: 0, sufijo: ' ha'}) +
+    kpi(v('30'), 'Uso minero (30)', {dec: 0, sufijo: ' ha', clase: 'aviso'}) +
+    kpi(v('9') + v('15') + v('18') + v('21'), 'Áreas agrícolas (14)', {dec: 0, sufijo: ' ha'}) + '</div>';
+  h += '<div class="kpis">' +
+    kpi(v('33'), 'Agua (33)', {dec: 0, sufijo: ' ha'}) +
+    kpi(v('5'), 'Manglar (5)', {dec: 0, sufijo: ' ha'}) +
+    kpi(v('11') + v('12') + v('29'), 'Herbazales y arbustales (10)', {dec: 0, sufijo: ' ha'}) +
+    kpi(v('3') - bosque0, 'Δ Bosque desde 1985', {dec: 0, sufijo: ' ha', clase: v('3') < bosque0 ? 'aviso' : 'fuerte'}) + '</div>';
+  h += grafico(L.anios, L.serie['3'], null, '#1f8d49', 'Bosque (clase 3) · 1985-2024 (ha)', 0);
+  h += grafico(L.anios, L.serie['30'], null, '#9c0027', 'Uso minero (clase 30) · 1985-2024 (ha)', 0);
+  const orden = L.clases.map(c => ({...c, ha: L.serie[c.codigo][i]})).sort((a, b) => b.ha - a.ha);
+  const max = orden[0].ha || 1;
+  h += '<h3>Clases RFI Landsat en ' + ESTADO.anio + '</h3>' + orden.map(c =>
+    '<div class="barra"><div class="rot"><span class="sw" style="background:#' + c.color + '"></span><span>' +
+    c.nombre + '</span><span class="ha">' + nf(c.ha) + ' ha</span></div>' +
+    '<div class="pista"><div class="rell" style="background:#' + c.color + '" data-w="' +
+    Math.max(0.5, 100 * c.ha / max).toFixed(1) + '"></div></div></div>').join('');
+  // comparacion de anos
+  const ia = Math.max(0, L.anios.indexOf(CMP.a));
+  const filas = L.clases.map(c => {
+    const a = L.serie[c.codigo][ia], b = L.serie[c.codigo][i];
+    const d = b - a;
+    return { c, a, b, d, p: a ? 100 * d / a : null };
+  }).sort((x, y) => Math.abs(y.d) - Math.abs(x.d));
+  const ops = an => L.anios.map(a => '<option value="' + a + '"' +
+    (a === an ? ' selected' : '') + '>' + a + '</option>').join('');
+  h += '<h3>Comparación ' + CMP.a + ' vs ' + ESTADO.anio + '</h3>' +
+    '<div class="cmpSel"><select id="cmpA">' + ops(CMP.a) + '</select>' +
+    '<span>vs</span><select id="cmpB">' + ops(ESTADO.anio) + '</select></div>' +
+    '<table class="cmpTabla"><tr><th>Clase</th><th class="n">' + CMP.a + ' (ha)</th>' +
+    '<th class="n">' + ESTADO.anio + ' (ha)</th><th class="n">Δ (ha)</th><th class="n">Δ %</th></tr>' +
+    filas.map(f => '<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:2px;' +
+      'background:#' + f.c.color + '"></span> ' + f.c.nombre + '</td>' +
+      '<td class="n">' + nf(f.a) + '</td><td class="n">' + nf(f.b) + '</td>' +
+      '<td class="n ' + (f.d >= 0 ? 'pos' : 'neg') + '">' + (f.d >= 0 ? '+' : '') + nf(f.d) + '</td>' +
+      '<td class="n ' + (f.d >= 0 ? 'pos' : 'neg') + '">' + (f.p >= 0 ? '+' : '') + nf(f.p, 1) + '</td></tr>').join('') +
+    '</table>';
+  h += '<div class="nota2 aviso"><b>Validación:</b> ' + L.validacion.nota + '</div>';
+  h += '<div class="fuente">Fuente: ' + L.fuente + '. Cierre aritmético verificado: peor desviación ' +
+    nf(L.validacion.peor_cierre_ha, 3) + ' ha en 40 años.</div>';
+  pintar(h, [{t: 'Reserva', ir: 'reserva'}]);
+  $('cmpA').value = String(CMP.a);
+  $('cmpB').value = String(ESTADO.anio);
+  $('cmpA').onchange = ev => { CMP.a = +ev.target.value; irAReservaLandsat(); };
+  $('cmpB').onchange = ev => { cambiarAnio(+ev.target.value); };
+  pintarRellenos();
+}
+
+/* ============ RFI Landsat <anio> · capa espacial por año ============ */
+let capaLnd = null, capaLndIzq = null;
+const LND = { comparando: false, izq: 1985 };
+const cacheMapidLnd = new Map();
+const ANILLO = window.ANILLO_RFI || null;   // polígono RFI (cargado al iniciar)
+
+function fetchMapidLnd(anio) {
+  const c = cacheMapidLnd.get(anio);
+  if (c && Date.now() - c.t < 24 * 60 * 1000) return Promise.resolve(c.url);
+  const pv = [1,3,4,5,6,9,10,11,12,13,14,15,18,21,22,23,24,25,26,27,29,30,31,32,33,34,50,66,68,81,82]
+    .map(v => 'pixelValue=' + v).join('&');
+  return fetch('https://demo.plataforma.mapbiomas.org/api/v1/venezuela/maps/map' +
+      '?territoryId=24-60-136&subthemeKey=coverage_lclu&legendKey=default&year=' + anio + '&' + pv,
+    { headers: { 'tenant-id': 'mapbiomas' } })
+    .then(r => r.json())
+    .then(d => {
+      if (!d || !d.url) throw new Error('sin respuesta del servicio MapBiomas');
+      cacheMapidLnd.set(anio, { url: d.url, t: Date.now() });
+      return d.url;
+    });
+}
+function proveedorRFI(url, anio) {
+  // tiles MapBiomas + máscara del polígono RFI: la clasificación se pinta
+  // estrictamente dentro del límite de la reserva
+  const base = new Cesium.UrlTemplateImageryProvider({
+    url, maximumLevel: 14, credit: 'RFI Landsat ' + anio + ' · MapBiomas Venezuela'
+  });
+  const prov = Object.create(base);
+  prov._mascaras = new Map();
+  prov._mascaraTesela = function (z, x, y) {
+    const clave = z + '/' + x + '/' + y;
+    let m = this._mascaras.get(clave);
+    if (m) return m;
+    const npix = 256 * 2 ** z;
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ANILLO.forEach((pt, i) => {
+      const mx = pt[0] / 180 * 20037508.342789244;
+      const wx = (mx + 20037508.342789244) / 40075016.68557849 * npix - x * 256;
+      const la = pt[1] * Math.PI / 180;
+      const wy = (20037508.342789244 - (40075016.68557849 / (2 * Math.PI)) *
+        Math.log(Math.tan(Math.PI / 4 + la / 2))) / 40075016.68557849 * npix - y * 256;
+      if (i === 0) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy);
+    });
+    ctx.closePath();
+    ctx.fill();
+    const d = ctx.getImageData(0, 0, 256, 256).data;
+    m = new Uint8Array(256 * 256);
+    for (let i = 0, j = 0; j < m.length; i += 4, j++) m[j] = d[i + 3] > 0 ? 1 : 0;
+    this._mascaras.set(clave, m);
+    if (this._mascaras.size > 800) this._mascaras.delete(this._mascaras.keys().next().value);
+    return m;
+  };
+  prov.requestImage = function (x, y, nivel, peticion) {
+    const pr = base.requestImage(x, y, nivel, peticion);
+    if (!pr || !pr.then) return pr;
+    return pr.then(img => {
+      if (!this._anillo) return img;
+      const clave = nivel + '/' + x + '/' + y;
+      let c = this._cacheTesela || (this._cacheTesela = new Map());
+      let r = c.get(clave);
+      if (!r) {
+        r = document.createElement('canvas');
+        r.width = img.width; r.height = img.height;
+        const ctx = r.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const im = ctx.getImageData(0, 0, r.width, r.height), d = im.data;
+        const masc = this._mascaraTesela(nivel, x, y);
+        for (let i = 0, j = 0; i < d.length; i += 4, j++) {
+          if (d[i + 3] === 0 || !masc[j]) d[i + 3] = 0;    // fuera del poligono RFI
+        }
+        ctx.putImageData(im, 0, 0);
+        c.set(clave, r);
+        if (c.size > 500) c.delete(c.keys().next().value);
+      }
+      return r;
+    });
+  };
+  return prov;
+}
+function ponerCoberturaLnd(anio, split) {
+  return fetchMapidLnd(anio).then(url => {
+    const prov = proveedorRFI(url, anio);
+    const l = viewer.imageryLayers.addImageryProvider(prov, 1);
+    l.alpha = 0.92;
+    l.splitDirection = split || Cesium.SplitDirection.NONE;
+    return l;
+  });
+}
+function refrescarCoberturaLnd() {
+  const token = ++refrescarCoberturaLnd.t;
+  const viejas = [capaLnd, capaLndIzq].filter(Boolean);
+  return ponerCoberturaLnd(ESTADO.anio,
+    LND.comparando ? Cesium.SplitDirection.RIGHT : Cesium.SplitDirection.NONE)
+    .then(l => {
+      if (token !== refrescarCoberturaLnd.t) { viewer.imageryLayers.remove(l, true); return; }
+      capaLnd = l;
+      viejas.forEach(v => viewer.imageryLayers.remove(v, true));
+      if (!LND.comparando) return;
+      return ponerCoberturaLnd(LND.izq, Cesium.SplitDirection.LEFT).then(izq => {
+        if (token !== refrescarCoberturaLnd.t) { viewer.imageryLayers.remove(izq, true); return; }
+        capaLndIzq = izq;
+        $('etqIzq').textContent = LND.izq;
+        $('etqDer').textContent = ESTADO.anio;
+      });
+    });
+}
+refrescarCoberturaLnd.t = 0;
+function alternarComparacionLnd() {
+  LND.comparando = !LND.comparando;
+  const btn = document.getElementById('btnComparar');
+  if (btn) btn.classList.toggle('activo', LND.comparando);
+  $('etiquetasSplit').classList.toggle('on', LND.comparando);
+  $('sliderSplit').classList.toggle('on', LND.comparando);
+  if (LND.comparando) { viewer.scene.splitPosition = 0.5; $('posSplit').value = 50; }
+  else viewer.scene.splitPosition = undefined;
+  refrescarCoberturaLnd();
+}
+
+/* ============================== capas ráster ============================== */
+/* =================== LEYENDA INTERACTIVA ===================
+   Clic en una clase: la muestra u oculta en el mapa (filtro de paleta
+   sobre los tiles) y abre su ficha: superficie, proporción frente al
+   resto, serie Sentinel-2 disponible y descripción de la tipología. */
+const DESCRIPCIONES = {
+  fao: {
+    1: 'Tierra con cobertura de copa igual o mayor al 10 %, árboles de al menos 5 m de altura y superficie de 0,5 ha o más (definición FAO/FRA). En esta capa no tiene píxeles por el defecto documentado de la app de muestreo.',
+    2: 'Vegetación leñosa o herbácea que no cumple alguno de los criterios FAO. En esta capa incluye también el bosque reclasificado por ese defecto: debe leerse como «vegetación».',
+    3: 'Áreas bajo uso agrícola activo: suelos trabajados y cultivos transitorios o permanentes.',
+    4: 'Frentes de explotación minera: remoción de suelo, piscinas de sedimentación e infraestructura asociada.',
+    5: 'Suelo expuesto sin cobertura vegetal significativa: bancos de material, playas fluviales y áreas erosionadas.',
+    6: 'Cuerpos y cursos de agua de la zona: ríos, caños y lagunas.',
+    7: 'Superficies construidas e infraestructura: asentamientos, vías y patios.'
+  },
+  n2: {
+    1: 'Bosque denso perennifolio de tierras bajas, de dosel continuo y alta biomasa; la formación dominante del sector norte.',
+    2: 'Bosque de dosel alto dominado por especies siempreverdes bajo clima estacional; transición entre el bosque húmedo y las formaciones deciduas.',
+    3: 'Bosque bajo con predominio de especies caducifolias, que pierden el follaje en la estación seca.',
+    4: 'Bosque sobre suelos hidromórficos anegados de forma temporal, propio de la planicie de inundación deltaica.',
+    5: 'Formación halófila del litoral, sobre sedimentos finos e influida por el régimen de mareas del delta del Orinoco.',
+    6: 'Herbazales de suelos anegados de forma permanente o estacional, dominados por gramíneas y ciperáceas.',
+    7: 'Ríos, caños, lagunas y canales del sector deltaico.',
+    9: 'Frentes de extracción con remoción activa de suelo y cuerpos de agua de sedimentación.',
+    11: 'Áreas de uso agrícola y pecuario del sector norte de la reserva.'
+  }
+};
+let LEY = null;   // {titulo, tipo, items, ctx, visibles:Set, foco}
+function abrirLeyenda(titulo, tipo, items, ctx) {
+  items = items.filter(i => i && i.color)
+    .map(i => ({codigo: i.codigo !== undefined ? i.codigo : i.dn, nombre: i.nombre,
+                color: String(i.color).replace('#', ''), ha: i.ha || 0, pct: i.pct || 0}));
+  items.sort((a, b) => b.ha - a.ha);
+  const colorDe = {};
+  items.forEach(i => { colorDe[i.codigo] = parseInt(i.color, 16); });
+  ctx.colorDe = colorDe;                // paleta para el minimapa de la ficha
+  LEY = { titulo, tipo, items, ctx, foco: items[0].codigo };
+  renderLeyenda();
+}
+function renderLeyenda() {
+  const caja = $('leyenda');
+  caja.querySelector('h2').childNodes[0].nodeValue = '◧ ' + LEY.titulo.toUpperCase();
+  $('leyendaItems').innerHTML = LEY.items.map(i =>
+    '<div class="litem' + (i.codigo === LEY.foco ? ' foco' : '') + '" data-c="' + i.codigo +
+    '" title="Clic: abrir o cerrar la ficha de esta tipología">' +
+    '<span class="sw" style="background:#' + i.color + '"></span>' +
+    '<span class="nom">' + i.nombre + '</span>' +
+    '<span class="pc">' + nf(i.ha) + ' ha</span></div>').join('');
+  caja.style.display = 'flex';
+  caja.classList.remove('plegado');
+  posicionarLeyenda();
+  $('leyendaItems').querySelectorAll('.litem').forEach(el => {
+    el.onclick = () => {
+      const c = +el.dataset.c;
+      if (LEY.foco === c) cerrarFicha();      // otra vez sobre la misma: cerrar
+      else { LEY.foco = c; abrirFicha(); }
+    };
+  });
+}
+
+/* ================= FICHA INDIVIDUAL DE LA TIPOLOGÍA ================= */
+const MUNDO_F = 40075016.68557849, MITAD_F = 20037508.342789244;   // Web Mercator
+const BBOX3857 = {
+  p6: [-6943800, 665348, -6803423, 737639],
+  n2: [-6922053, 869763, -6717871, 966711]
+};
+let fichaManual = null;
+
+function abrirFicha() {
+  const caja = $('ficha');
+  const primera = caja.style.display !== 'flex';
+  caja.style.display = 'flex';
+  if (primera) {
+    caja.classList.remove('aparece');
+    void caja.offsetWidth;
+    caja.classList.add('aparece');
+  }
+  renderFicha();
+  posicionarFicha();
+}
+function cerrarFicha() {
+  $('ficha').style.display = 'none';
+  fichaManual = null;
+}
+function posicionarFicha() {
+  const caja = $('ficha');
+  if (caja.style.display !== 'flex') return;
+  const w = caja.offsetWidth, h = caja.offsetHeight;
+  if (!w || !h) return;
+  let x, y, alturaMax;
+  if (fichaManual) {
+    x = fichaManual.x; y = fichaManual.y;
+    alturaMax = window.innerHeight - y - 12;
+  } else {
+    // a la izquierda de la leyenda, sobre la línea de tiempo: fila superior limpia
+    const l = leyendaEl.getBoundingClientRect();
+    const t = $('lineaTiempo').getBoundingClientRect();
+    x = l.left - w - 12; y = Math.min(l.top, t.top - Math.min(h, 420) - 10);
+    alturaMax = t.top - 76;
+  }
+  x = Math.max(12, Math.min(x, window.innerWidth - w - 12));
+  y = Math.max(66, Math.min(y, window.innerHeight - h - 12));
+  caja.style.left = Math.round(x) + 'px';
+  caja.style.top = Math.round(y) + 'px';
+  caja.style.maxHeight = Math.max(220, Math.round(alturaMax)) + 'px';
+}
+function donutSVG() {
+  const total = LEY.items.reduce((s, i) => s + i.ha, 0) || 1;
+  const r = 42, C = 2 * Math.PI * r;
+  let acc = 0;
+  const segs = LEY.items.map(i => {
+    const frac = i.ha / total;
+    const g = '<circle cx="60" cy="60" r="' + r + '" fill="none" stroke="#' + i.color +
+      '" stroke-width="' + (i.codigo === LEY.foco ? 17 : 11) + '" opacity="' +
+      (i.codigo === LEY.foco ? 1 : 0.32) + '" stroke-dasharray="' + (frac * C - 1.5).toFixed(2) + ' ' + C.toFixed(2) +
+      '" stroke-dashoffset="' + (-acc * C).toFixed(2) + '"/>';
+    acc += frac;
+    return g;
+  }).join('');
+  const foco = LEY.items.find(x => x.codigo === LEY.foco);
+  const pct = foco ? foco.pct : 0;
+  return '<svg viewBox="0 0 120 120">' +
+    '<circle cx="60" cy="60" r="' + r + '" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="11"/>' +
+    '<g transform="rotate(-90 60 60)">' + segs + '</g>' +
+    '<text x="60" y="57" text-anchor="middle" fill="#e8eaed" font-size="15" font-weight="700" ' +
+    'font-family="Consolas,monospace">' + nf(pct, 1) + '%</text>' +
+    '<text x="60" y="72" text-anchor="middle" fill="#9AA0C3" font-size="7.5" ' +
+    'font-family="Consolas,monospace">DEL TOTAL</text></svg>';
+}
+function serieDeFicha(i) {
+  if (LEY.tipo === 'fao') {
+    const col = {1: 'bosque_ha', 2: 'otra_veg_ha', 5: 'sin_veg_ha', 6: 'agua_ha'}[i.codigo];
+    if (col) {
+      const cob = DATOS.bloques.P6.coberturas;
+      return { grafico: grafico(cob.map(x => x.anio), cob.map(x => x[col]),
+        cob.map(x => x[col.replace('_ha', '_se_ha')] || 0), '#' + i.color,
+        'Evolución del área de cobertura · 2017-2026 (ha)', 0), nota: '' };
+    }
+    return { grafico: '', nota: 'Sin serie anual para esta clase: solo se discrimina en la clasificación ' +
+      'FAO 2025 (la serie 2017-2026 se construye con umbrales de NDVI y la máscara de agua JRC, que no ' +
+      'distinguen cultivo, minería ni urbano año a año).' };
+  }
+  // capa N2 de fecha única: el período disponible es un solo año
+  return { grafico: grafico(['capa'], [i.ha], [0], '#' + i.color,
+      'Área de cobertura · período disponible (ha)', 0),
+    nota: 'La tipología N2 es una capa de fecha única, por lo que el período disponible es un solo ' +
+      'momento. La evolución 2017-2026 por tipología podrá calcularse al procesarse la clasificación ' +
+      'multitemporal del área N2 (pendiente de cuota de Earth Engine).' };
+}
+function renderFicha() {
+  const i = LEY.items.find(x => x.codigo === LEY.foco);
+  if (!i) { cerrarFicha(); return; }
+  $('fichaTitulo').textContent = '◧ ' + i.nombre.toUpperCase();
+  const orden = [...LEY.items].sort((a, b) => b.ha - a.ha);
+  const rango = orden.findIndex(x => x.codigo === i.codigo) + 1;
+  const resto = Math.max(0, 100 - i.pct);
+  const { grafico: g, nota } = serieDeFicha(i);
+  $('fichaCuerpo').innerHTML =
+    '<div class="mapaTipologia"><canvas id="mapaClase" width="588" height="330"></canvas>' +
+    '<div class="cargando">generando el mapa de la tipología…</div>' +
+    '<div class="escala" id="mapaEscala"></div></div>' +
+    '<div class="kpis4">' +
+    kpi(i.ha, 'Superficie (ha)', {dec: 0}) + kpi(i.ha / 100, 'Superficie (km²)', {dec: 2}) +
+    kpi(i.pct, 'Proporción del total', {dec: 2, sufijo: ' %'}) + kpi(rango, 'Rango por superficie', {dec: 0}) +
+    '</div>' +
+    '<div class="donutFila">' + donutSVG() +
+    '<div class="dtexto"><b style="color:#' + i.color + '">■</b> <b>' + i.nombre + '</b>: ' +
+    nf(i.pct, 2) + ' % del área clasificada.<br><span style="color:var(--txt3)">■</span> Las demás ' +
+    'tipologías: ' + nf(resto, 2) + ' % en conjunto.</div></div>' +
+    g + (nota ? '<div class="nota2">' + nota + '</div>' : '') +
+    '<div class="nota2">' + (DESCRIPCIONES[LEY.tipo][i.codigo] || '') + '</div>';
+  $('fichaCuerpo').querySelectorAll('.kpi .v').forEach(el => {
+    EFECTOS.contar(el, el.dataset.v === '' ? null : Number(el.dataset.v), +el.dataset.d, el.dataset.s);
+  });
+  dibujarMinimapa(i.codigo);
+}
+function dibujarMinimapa(codigo) {
+  const lienzo = $('mapaClase');
+  if (!lienzo) return;
+  const cfg = LEY.ctx, bbox = BBOX3857[LEY.tipo === 'fao' ? 'p6' : 'n2'];
+  // el navegador premultiplica el alfa de los PNG con redondeo: algunos canales
+  // llegan desplazados ±1, asi que la clase se identifica por el color de
+  // paleta MAS CERCANO, no por igualdad exacta
+  const paleta = Object.entries(cfg.colorDe).map(([cod, rgb]) => ({
+    cod: +cod, r: (rgb >> 16) & 255, g: (rgb >> 8) & 255, b: rgb & 255 }));
+  const z = 10, n = 256 * 2 ** z;
+  const pxX0 = (bbox[0] + MITAD_F) / MUNDO_F * n, pxX1 = (bbox[2] + MITAD_F) / MUNDO_F * n;
+  const pxY0 = (MITAD_F - bbox[3]) / MUNDO_F * n, pxY1 = (MITAD_F - bbox[1]) / MUNDO_F * n;
+  const tx0 = Math.floor(pxX0 / 256), tx1 = Math.floor(pxX1 / 256);
+  const ty0 = Math.floor(pxY0 / 256), ty1 = Math.floor(pxY1 / 256);
+  const promesas = [];
+  for (let tx = tx0; tx <= tx1; tx++) {
+    for (let ty = ty0; ty <= ty1; ty++) {
+      promesas.push(new Promise(res => {
+        const im = new Image();
+        im.crossOrigin = 'anonymous';
+        im.onload = () => res({tx, ty, im});
+        im.onerror = () => res(null);
+        im.src = cfg.url.replace('{z}', z).replace('{x}', tx).replace('{y}', ty);
+      }));
+    }
+  }
+  Promise.all(promesas).then(lista => {
+    if (!LEY || LEY.foco !== codigo || !$('mapaClase')) return;   // la ficha cambió mientras cargaba
+    const nat = document.createElement('canvas');
+    // origen redondeado a píxel entero: con offsets fraccionarios el navegador
+    // re-muestrea la imagen y los colores exactos de la paleta se mezclan
+    const baseX = Math.round(pxX0), baseY = Math.round(pxY0);
+    nat.width = Math.max(2, Math.ceil(pxX1 - pxX0) + 2);
+    nat.height = Math.max(2, Math.ceil(pxY1 - pxY0) + 2);
+    const nctx = nat.getContext('2d', {willReadFrequently: true});
+    // SIN fondo previo: los tiles traen alfa 220 y sobre un fondo pintado el
+    // navegador los mezcla, desplazando el RGB y rompiendo el filtro por clase
+    lista.forEach(t => {
+      if (!t) return;
+      nctx.drawImage(t.im, t.tx * 256 - baseX, t.ty * 256 - baseY);
+    });
+    const im = nctx.getImageData(0, 0, nat.width, nat.height), d = im.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) { d[i] = 13; d[i + 1] = 18; d[i + 2] = 38; d[i + 3] = 255; continue; }
+      let mejor = -1, dist = 1e12;
+      for (let j = 0; j < paleta.length; j++) {
+        const pc = paleta[j];
+        const er = d[i] - pc.r, eg = d[i + 1] - pc.g, eb = d[i + 2] - pc.b;
+        const e = er * er + eg * eg + eb * eb;
+        if (e < dist) { dist = e; mejor = pc.cod; }
+      }
+      if (mejor === codigo) {       // la tipologia seleccionada, en color pleno
+        d[i + 3] = 255;
+      }
+      else {                        // las demás, muy tenues como contexto
+        d[i] = (d[i] * 0.22 + 26) | 0; d[i + 1] = (d[i + 1] * 0.22 + 32) | 0; d[i + 2] = (d[i + 2] * 0.22 + 52) | 0;
+        d[i + 3] = 255;
+      }
+    }
+    nctx.putImageData(im, 0, 0);
+    const ctx2 = lienzo.getContext('2d');
+    ctx2.imageSmoothingEnabled = false;
+    ctx2.clearRect(0, 0, lienzo.width, lienzo.height);
+    const esc = Math.min(lienzo.width / nat.width, lienzo.height / nat.height);
+    const dw = nat.width * esc, dh = nat.height * esc;
+    ctx2.drawImage(nat, (lienzo.width - dw) / 2, (lienzo.height - dh) / 2, dw, dh);
+    const carg = lienzo.parentElement.querySelector('.cargando');
+    if (carg) carg.remove();
+    // barra de escala
+    const fy = ((pxY0 + pxY1) / 2) / n;
+    const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * fy)));
+    const mpp = 156543.03392 * Math.cos(lat) / 2 ** z / esc;
+    const km = mpp > 500 ? 50 : mpp > 250 ? 25 : mpp > 120 ? 10 : 5;
+    const barra = $('mapaEscala');
+    if (barra) barra.textContent = '— ' + km + ' km';
+  });
+}
+(function () {
+  const barra = $('fichaBarra');
+  let arrastre = null;
+  barra.addEventListener('pointerdown', e => {
+    if (e.target.id === 'fichaCerrar') return;
+    arrastre = { dx: e.clientX - $('ficha').offsetLeft, dy: e.clientY - $('ficha').offsetTop,
+                 x0: e.clientX, y0: e.clientY, movido: false };
+    try { barra.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  barra.addEventListener('pointermove', e => {
+    if (!arrastre) return;
+    if (!arrastre.movido && Math.hypot(e.clientX - arrastre.x0, e.clientY - arrastre.y0) > 5) {
+      arrastre.movido = true;
+    }
+    if (arrastre.movido) {
+      fichaManual = { x: e.clientX - arrastre.dx, y: e.clientY - arrastre.dy };
+      posicionarFicha();
+    }
+  });
+  barra.addEventListener('pointerup', () => { arrastre = null; });
+  barra.addEventListener('pointercancel', () => { arrastre = null; });
+  $('fichaCerrar').onclick = cerrarFicha;
+  new ResizeObserver(posicionarFicha).observe($('ficha'));
+  window.addEventListener('resize', posicionarFicha);
+})();
+
+
+/* =================== LEYENDA INTERACTIVA ===================
+   Clic en una clase: la muestra u oculta en el mapa (filtro de paleta
+   sobre los tiles) y abre su ficha: superficie, proporción frente al
+   resto, serie Sentinel-2 disponible y descripción de la tipología. */
+/* -------- posicion y arrastre de la leyenda (sin superposiciones) -------- */
+const leyendaEl = $('leyenda');
+let leyendaManual = null;   // posicion elegida por el usuario (tras arrastrar)
+function posicionarLeyenda() {
+  if (leyendaEl.style.display !== 'flex') return;
+  const w = leyendaEl.offsetWidth, h = leyendaEl.offsetHeight;
+  if (!w || !h) return;
+  let x, y, alturaMax;
+  if (leyendaManual) {
+    x = leyendaManual.x; y = leyendaManual.y;
+    alturaMax = window.innerHeight - y - 12;
+  } else {
+    // anclada encima de la linea de tiempo, alineada a su borde derecho:
+    // por construccion no puede taparla ni quedar tapada
+    const t = $('lineaTiempo').getBoundingClientRect();
+    x = t.right - w; y = t.top - h - 10;
+    alturaMax = t.top - 76;
+  }
+  x = Math.max(12, Math.min(x, window.innerWidth - w - 12));
+  y = Math.max(66, Math.min(y, window.innerHeight - h - 12));
+  leyendaEl.style.left = Math.round(x) + 'px';
+  leyendaEl.style.top = Math.round(y) + 'px';
+  // si el contenido crece mucho (ficha abierta), se recorta dentro del panel:
+  // nunca invade la serie ni sale del visor
+  leyendaEl.style.maxHeight = Math.max(190, Math.round(alturaMax)) + 'px';
+}
+function cablearControles() {
+  // plegado de paneles
+  document.querySelectorAll('[data-plegar]').forEach(h => {
+    h.onclick = () => $(h.dataset.plegar).classList.toggle('plegado');
+  });
+  document.querySelectorAll('[data-plegar-riel]').forEach(h => {
+    h.onclick = () => {
+      const r = $('riel'); r.classList.toggle('plegado');
+      document.body.classList.toggle('riel-plegado', r.classList.contains('plegado'));
+      h.querySelector('.chev').textContent = r.classList.contains('plegado') ? '▸' : '▾';
+    };
+  });
+  // capas
+  $('chkBloques').onchange = function () { if (dsBloques) dsBloques.show = this.checked; };
+  $('chkReserva').onchange = function () { if (dsReserva) dsReserva.show = this.checked; };
+  let dsRFI = null;
+  $('chkRFI').onchange = function () {
+    if (this.checked) {
+      if (!dsRFI) {
+        fetch('data/rfi_boundary_simple.geojson').then(r => r.json()).then(g => {
+          // poblar la fuente ANTES de añadirla: dataSources.add() devuelve una promesa
+          const ds = new Cesium.CustomDataSource('RFI Landsat');
+          const color = Cesium.Color.fromCssColorString('#ffb46b');
+          g.features.forEach(f => {
+            const anillos = f.geometry.type === 'Polygon' ? f.geometry.coordinates :
+              f.geometry.coordinates.reduce((a, p) => a.concat(p), []);
+            anillos.forEach(anillo => {
+              const plano = [];
+              anillo.forEach(pt => plano.push(pt[0], pt[1]));
+              ds.entities.add({
+                polyline: {
+                  positions: Cesium.Cartesian3.fromDegreesArray(plano),
+                  width: 3.2, clampToGround: true, material: color
+                }
+              });
+            });
+            if (f.geometry.type === 'Polygon') {
+              ds.entities.add({
+                polygon: {
+                  hierarchy: Cesium.Cartesian3.fromDegreesArrayHeights(
+                    f.geometry.coordinates[0].flatMap(pt => [pt[0], pt[1], 0])),
+                  material: Cesium.Color.fromCssColorString('rgba(255,160,122,0.05)'),
+                  classificationType: Cesium.ClassificationType.TERRAIN
+                }
+              });
+            }
+          });
+          ds.show = document.getElementById('chkRFI').checked;
+          viewer.dataSources.add(ds);
+          dsRFI = ds;
+        }).catch(e => {
+          console.error('RFI:', e);
+          window.__rfiErr = (e && e.message) || String(e);
+          document.querySelector('#chkRFI').closest('label').querySelector('.sub').textContent =
+            'error: ' + window.__rfiErr;
+          document.getElementById('chkRFI').checked = false;
+        });
+      } else dsRFI.show = true;
+    } else if (dsRFI) dsRFI.show = false;
+  };
+  $('chkP6').onchange = function () {
+    if (this.checked) {
+      if (!CAPAS.p6.capa) {
+        CAPAS.p6.capa = viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+          url: CAPAS.p6.url, minimumLevel: 6, maximumLevel: CAPAS.p6.maxLevel, credit: CAPAS.p6.credito
+        }));
+        CAPAS.p6.capa.alpha = CAPAS.p6.alpha;
+      } else CAPAS.p6.capa.show = true;
+      const items = (DATOS.capaP6 ? DATOS.capaP6.clases :
+        (DATOS.clasesFao || []).map(c => ({codigo: c.codigo, nombre: c.nombre, color: c.color, ha: 0, pct: 0})));
+      abrirLeyenda('Cobertura P6 · 10 m', 'fao', items, CAPAS.p6);
+    } else if (CAPAS.p6.capa) { CAPAS.p6.capa.show = false; if (LEY && LEY.ctx === CAPAS.p6) cerrarFicha(); }
+  };
+  $('opacidadP6').oninput = function () {
+    $('valOpP6').textContent = this.value + ' %';
+    CAPAS.p6.alpha = this.value / 100;
+    if (CAPAS.p6.capa) CAPAS.p6.capa.alpha = CAPAS.p6.alpha;
+  };
+  $('chkN2').onchange = function () {
+    if (this.checked) {
+      if (!DATOS.n2 || !DATOS.n2.raster) { this.checked = false; irAN2(); return; }
+      if (!CAPAS.n2.capa) {
+        CAPAS.n2.capa = viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+          url: CAPAS.n2.url, minimumLevel: 6, maximumLevel: CAPAS.n2.maxLevel, credit: CAPAS.n2.credito
+        }));
+        CAPAS.n2.capa.alpha = CAPAS.n2.alpha;
+      } else CAPAS.n2.capa.show = true;
+      abrirLeyenda('Tipología ecológica N2', 'n2', DATOS.n2.clases, CAPAS.n2);
+    } else if (CAPAS.n2.capa) { CAPAS.n2.capa.show = false; if (LEY && LEY.ctx === CAPAS.n2) cerrarFicha(); }
+  };
+  const btnN2 = $('btnN2Stats');
+  if (btnN2) btnN2.onclick = irAN2;
+  $('opacidadN2').oninput = function () {
+    $('valOpN2').textContent = this.value + ' %';
+    CAPAS.n2.alpha = this.value / 100;
+    if (CAPAS.n2.capa) CAPAS.n2.capa.alpha = CAPAS.n2.alpha;
+  };
+  $('chkRelieve').onchange = function () { ponerRelieve(this.checked); };
+  // botones
+  $('btnReserva').onclick = volarReserva;
+  $('btnTour').onclick = recorrido;
+  $('btnReservaVista').onclick = volarReserva;
+  $('btnNorte').onclick = () => viewer.camera.flyTo({
+    destination: viewer.camera.position,
+    orientation: {heading: 0, pitch: viewer.camera.pitch, roll: 0}, duration: 1
+  });
+  $('btnZoomMas').onclick = () => viewer.camera.zoomIn(viewer.camera.positionCartographic.height * 0.4);
+  $('btnZoomMenos').onclick = () => viewer.camera.zoomOut(viewer.camera.positionCartographic.height * 0.6);
+  $('posSplit').oninput = function () { viewer.scene.splitPosition = this.value / 100; };
+  // leyenda: arrastre por su cabecera (clic sin mover = plegar) y reajuste
+  (function () {
+    const barra = $('leyendaBarra');
+    let arrastre = null;
+    barra.addEventListener('pointerdown', e => {
+      arrastre = { dx: e.clientX - leyendaEl.offsetLeft, dy: e.clientY - leyendaEl.offsetTop,
+                   x0: e.clientX, y0: e.clientY, movido: false };
+      try { barra.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    barra.addEventListener('pointermove', e => {
+      if (!arrastre) return;
+      if (!arrastre.movido && Math.hypot(e.clientX - arrastre.x0, e.clientY - arrastre.y0) > 5) {
+        arrastre.movido = true;
+        leyendaEl.classList.add('arrastrando');
+      }
+      if (arrastre.movido) {
+        leyendaManual = { x: e.clientX - arrastre.dx, y: e.clientY - arrastre.dy };
+        posicionarLeyenda();
+      }
+    });
+    barra.addEventListener('pointerup', () => {
+      if (arrastre && !arrastre.movido) leyendaEl.classList.toggle('plegado');
+      arrastre = null;
+      leyendaEl.classList.remove('arrastrando');
+      posicionarLeyenda();
+    });
+    barra.addEventListener('pointercancel', () => {
+      arrastre = null;
+      leyendaEl.classList.remove('arrastrando');
+    });
+  })();
+  // si cambia el tamano de la linea de tiempo (plegado, anios en dos filas) o de la
+  // ventana, la leyenda se vuelve a colocar sola
+  new ResizeObserver(posicionarLeyenda).observe($('lineaTiempo'));
+  new ResizeObserver(posicionarLeyenda).observe(leyendaEl);
+  window.addEventListener('resize', posicionarLeyenda);
+
+  // picking y telemetría
+  const h = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+  h.setInputAction(mov => {
+    const p = viewer.scene.pick(mov.position);
+    if (Cesium.defined(p) && p.id && p.id.properties && p.id.properties.bloque) {
+      detenerTour(); seleccionar(p.id.properties.bloque.getValue());
+    }
+  }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+  h.setInputAction(() => {
+    $('chipAlt').textContent = Math.round(viewer.camera.positionCartographic.height).toLocaleString('es') + ' m';
+  }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+  viewer.camera.percentageChanged = 0.02;
+  viewer.camera.changed.addEventListener(() => {
+    if (viewer) $('chipAlt').textContent = Math.round(viewer.camera.positionCartographic.height).toLocaleString('es') + ' m';
+  });
+  // avisos de estado de las capas
+  const n2TieneRaster = !!(DATOS.n2 && DATOS.n2.raster);
+  if (!DATOS.n2) {
+    $('filaN2').classList.add('deshabilitada');
+    $('opN2').style.display = 'none';
+    $('subN2').textContent = 'sin datos';
+  } else if (!n2TieneRaster) {
+    // hay estadísticas de la tipología pero la capa ráster sigue pendiente
+    $('opN2').style.display = 'none';
+    $('subN2').textContent = DATOS.n2.clases.length + ' clases · solo estadísticas';
+    $('btnN2Stats').style.display = 'flex';
+    EFECTOS.magnet($('btnN2Stats'), 0.2);
+  } else {
+    $('subN2').textContent = DATOS.n2.clases.length + ' clases · área reclasificada';
+  }
+  $('subP6').textContent = DATOS.capaP6 ? 'clase bosque en revisión' : 'sin capa';
+  viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(-61.4, 7.2, 780000), duration: 2.6});
+  actualizarChips(); actualizarMini();
+}
+
+/* ------------------------------------------------------------------ arranque */
+EFECTOS.aurora($('cargaLienzo'));
+const pasos = [[300,'CesiumJS 1.124'],[900,'GeoJSON de bloques'],[1500,'Sentinel-2 · EOX'],
+               [2100,'clasificación FAO'],[2600,'listo']];
+pasos.forEach(([ms, txt]) => setTimeout(() => {
+  const b = $('barraCarga'); if (b) b.firstElementChild.style.width = Math.min(100, ms / 30) + '%';
+}, ms));
+setTimeout(arrancar, 60);
+</script>
+</body>
+</html>
